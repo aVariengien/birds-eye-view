@@ -15,6 +15,7 @@ import concurrent.futures
 from prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT
 import threading
 import json
+import markdown # type: ignore
 
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
@@ -31,6 +32,9 @@ def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
     return wrapped_str
 
 
+def make_display_text(text: str):
+    return markdown.markdown(text)
+
 @define
 class Chunk:
     og_text: str = field()  # the original text the atom has been created with
@@ -45,9 +49,7 @@ class Chunk:
 
     def __attrs_post_init__(self):
         self.text = self.og_text
-        self.display_text = wrap_str(
-            self.text, max_line_len=100
-        )  # TODO: update when text update
+        self.display_text = make_display_text(self.text)
 
 
 class PipelineStep:
@@ -133,7 +135,7 @@ class OpenAITextProcessor(PipelineStep):
     def update_chunk(self, chunk: Chunk, response: str) -> Chunk:
         if self.update_text:  # Update text if required
             chunk.text = response
-            chunk.display_text = wrap_str(chunk.text, max_line_len=100)
+            chunk.display_text = make_display_text(chunk.text)
 
         # Update attribs based on output_keys
         if self.output_key != "":
