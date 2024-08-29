@@ -38,6 +38,8 @@ from bokeh.transform import factor_cmap  # type: ignore
 # Streamlit page configuration
 st.set_page_config(layout="wide")
 
+
+DEFAULT_VIS_FIELD = ["doc_position", "page", "chunk_id", "title", "url", "index"]
 # Initialize session state
 if "chunk_collection" not in st.session_state:
     st.session_state.chunk_collection = None
@@ -45,14 +47,17 @@ elif st.session_state.chunk_collection is not None:
     st.session_state.viz_options = list(
         set(
             list(st.session_state.chunk_collection.chunks[0].attribs.keys())
-            + ["page", "chunk_id", "title", "url", "index"]
+            + DEFAULT_VIS_FIELD
         )
     )
 if "pdf" not in st.session_state:
     st.session_state.chunks = None
     st.session_state.doc_names = None
 if "viz_options" not in st.session_state:
-    st.session_state.viz_options = ["page", "chunk_id", "title", "url", "index"]
+    st.session_state.viz_options = DEFAULT_VIS_FIELD
+
+if "vis_field" not in st.session_state:
+    st.session_state.vis_field = DEFAULT_VIS_FIELD[0]
 
 # Sidebar
 st.sidebar.title("Configuration")
@@ -60,7 +65,13 @@ st.sidebar.title("Configuration")
 # File/Cache input
 file_paths = st.sidebar.text_area(
     "Enter file paths or URLs (one per line)",
-    "https://www.plurality.net/v/chapters/3-1/eng/?mode=dark\nhttps://www.plurality.net/v/chapters/5-0/eng/?mode=dark",
+    """https://thezvi.substack.com/p/ai-79-ready-for-some-football
+https://thezvi.substack.com/p/ai-78-some-welcome-calm
+https://thezvi.substack.com/p/ai-77-a-few-upgrades
+https://thezvi.substack.com/p/danger-ai-scientist-danger
+https://thezvi.substack.com/p/ai-76-six-short-stories-about-openai
+https://thezvi.substack.com/p/ai-75-math-is-easier
+https://thezvi.substack.com/p/ai-74-gpt-4o-mini-me-and-llama-3""",
 )
 cache_file = st.sidebar.text_input("Cache file", "cache/cache.json")
 
@@ -74,23 +85,23 @@ cache_file = st.sidebar.text_input("Cache file", "cache/cache.json")
 #     cache_file=cache_file
 # ),
 
-# DotProductLabelor(
-#     possible_labels=ALL_EMOJIS,
-#     nb_labels=3,
-#     cache_file=cache_file,
-#     embedding_model="text-embedding-3-small",
-#     key_name="emoji",
-#     prefix="",
-# ),
 
 pipeline_code = st.sidebar.text_area(
     "Pipeline Code",
     """Pipeline([
     OpenAIEmbeddor(
-        model="text-embedding-3-small", 
+        model=embedding_model, 
         cache_file=cache_file,
         batch_size=1000,
         ),
+    DotProductLabelor(
+        possible_labels=ALL_EMOJIS,
+        nb_labels=3,
+        cache_file=cache_file,
+        embedding_model=embedding_model,
+        key_name="emoji",
+        prefix="",
+    ),
     UMAPReductor(
         verbose=True,
         n_neighbors=40,
@@ -108,8 +119,25 @@ if st.sidebar.checkbox("Use all chunks"):
 
 chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=2000, value=400)
 # Visualization options
+embedding_model = st.sidebar.selectbox(
+    "Embedding Model",
+    ["text-embedding-3-small", "text-embedding-3-large"],
+    index=0,
+)
 
-vis_field = st.sidebar.selectbox("Visualization Field", st.session_state.viz_options)
+
+st.session_state.vis_field = st.sidebar.selectbox(
+    "Visualization Field",
+    st.session_state.viz_options,
+    index=(
+        0
+        if st.session_state.vis_field is None
+        else st.session_state.viz_options.index(st.session_state.vis_field)
+    ),
+    placeholder=(
+        "" if st.session_state.vis_field is None else st.session_state.vis_field
+    ),
+)
 use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors")
 
 # Run pipeline button
@@ -117,17 +145,19 @@ run_pipeline = st.sidebar.button("Run Pipeline")
 
 # Add EmbeddingSearch configuration
 st.sidebar.header("EmbeddingSearch Configuration")
-search_prompt = st.sidebar.text_input("Search Prompt")
-search_model = st.sidebar.selectbox(
-    "Embedding Model",
-    ["text-embedding-3-small", "text-embedding-3-large"],
-    index=0,
+search_prompt = st.sidebar.text_area(
+    "Search Prompt", placeholder="Enter a prompt to show the related chunks."
 )
-assert search_model is not None
+
+search_threshold = st.sidebar.slider(
+    "Search Threshold", min_value=0.0, max_value=1.0, value=0.2, step=0.01
+)
+
+assert embedding_model is not None
 run_search = st.sidebar.button("Run Search")
 
 # Main content
-st.title("Chunk Map Visualization")
+st.title("🐦‍⬛ Bird's eye view")
 
 
 # Function to create ChunkCollection
@@ -145,7 +175,7 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code, cache_file
     return ChunkCollection(chunks=chunks, pipeline=pipeline)
 
 
-def make_display_text(chunk: Chunk):
+def make_display_text(chunk: Chunk, vis_field: str):
     """Return a fancy text to display, and the raw text to be used as hover"""
     text = ""
     if "title" in chunk.attribs:
@@ -157,7 +187,14 @@ def make_display_text(chunk: Chunk):
         text += f"""<br><a href="{chunk.attribs["url"]}#:~:text={first_words}">View source</a>"""
     if "page" in chunk.attribs:
         text += f"""<br>Page {chunk.attribs["page"]}"""
-    return text, md(chunk.display_text, convert=[])
+
+    text += f"""<br><br>{vis_field}: {chunk.attribs[vis_field]}"""
+
+    raw_text = (
+        md(chunk.display_text, convert=[])
+        + f"   |{vis_field}: {chunk.attribs[vis_field]}"
+    )  # strip html
+    return text, raw_text
 
 
 def visualize_chunks(
@@ -177,7 +214,7 @@ def visualize_chunks(
         if chunk.x is not None:
             x.append(chunk.x)
             y.append(chunk.y)
-            fancy_text, raw_text = make_display_text(chunk)
+            fancy_text, raw_text = make_display_text(chunk, vis_field)
             texts.append(fancy_text)
             hover_texts.append(raw_text)
             display_values.append(chunk.attribs.get(vis_field, "") if vis_field else "")
@@ -264,8 +301,6 @@ def visualize_chunks(
         )
         p.add_layout(color_bar, "left")
 
-
-
     # Add hover tool
     hover = HoverTool(renderers=[circles], tooltips=[("Text", "@hover_texts")])
     p.add_tools(hover)
@@ -289,7 +324,7 @@ def visualize_chunks(
         var index = cb_data.source.selected.indices[0];
         var text = source.data['text'][index] || '';
         var display_val = source.data['display'][index] || '';
-        text_div.text = '<div style="background-color: white; padding: 10px; border: 1px solid black;">' + text + '<br>' +  'Display val:'+ display_val +'</div>';
+        text_div.text = text;
         text_div.width = 300
             
         // Hide previous lines
@@ -340,23 +375,33 @@ if run_pipeline:
 
     st.success("Pipeline completed !")
 
+import numpy as np
+
 if run_search and st.session_state.chunk_collection is not None:
     embedding_search = EmbeddingSearch(
         prompt=search_prompt,
-        embedder=OpenAIEmbeddor(cache_file=cache_file, model=search_model),
+        threshold=search_threshold,
+        embedder=OpenAIEmbeddor(cache_file=cache_file, model=embedding_model),
         cache_file=cache_file,
-        embedding_model=search_model,
+        embedding_model=embedding_model,
     )
     st.session_state.chunk_collection.apply_step(embedding_search)
-    vis_field = "Search:" + search_prompt
+    st.session_state.vis_field = "Search:" + search_prompt
     st.success("EmbeddingSearch completed!")
+
+    print(
+        np.dot(
+            st.session_state.chunk_collection.chunks[0].embedding,
+            st.session_state.chunk_collection.chunks[1].embedding,
+        )
+    )
 
 if st.session_state.chunk_collection is not None:
     # Visualize chunks
-    assert type(vis_field) == str
+    assert type(st.session_state.vis_field) == str
     visualize_chunks(
         st.session_state.chunk_collection,
-        vis_field,
+        st.session_state.vis_field,
         use_qualitative_colors,
     )
 else:

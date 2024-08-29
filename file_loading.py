@@ -117,7 +117,7 @@ def import_pdf(
 
     chunks = [
         Chunk(
-            og_text=text, attribs={"page": page_nb[i], "index": i, "title": file_name}
+            og_text=text, attribs={"page": page_nb[i], "index": i,"doc_position":i/len(texts), "title": file_name}
         )
         for i, text in enumerate(texts)
     ]
@@ -231,7 +231,7 @@ def load_url(
         texts = texts[:max_chunk]
 
     chunks = [
-        Chunk(og_text=text, attribs={"title": title, "url": url, "index": i})
+        Chunk(og_text=text, attribs={"title": title, "url": url, "index": i, "doc_position":i/len(texts)})
         for i, text in enumerate(texts)
     ]
     return chunks

@@ -36,6 +36,32 @@ def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
 def make_display_text(text: str):
     return markdown.markdown(text)
 
+def sharpen(value, threshold, sharpness=10):
+    """
+    Crush values below the threshold towards 0 and boost values above the threshold towards 1.
+    
+    Args:
+    - values (array-like): Array of input values to transform.
+    - threshold (float): The threshold value for the transformation.
+    - sharpness (float): Controls the steepness of the transition (higher values = sharper transition).
+    
+    Returns:
+    - transformed_values (numpy array): The transformed array.
+    """
+    value = np.clip(value, 0, 1)
+    
+    # Apply a modified logistic function
+    logistic = 1 / (1 + np.exp(-sharpness * (value - threshold)))
+    
+    # Scale the logistic function to meet the requirements
+    delta = (logistic - 0.5) * np.minimum(value, 1 - value) * 2
+    transformed_value = value + delta
+    
+    # Ensure output values are between 0 and 1
+    transformed_value = np.clip(transformed_value, 0, 1)
+    
+    return transformed_value
+
 @define
 class Chunk:
     og_text: str = field()  # the original text the atom has been created with
@@ -281,13 +307,14 @@ class DotProductLabelor(PipelineStep):
             chunk.attribs[self.key_name] = " ".join(top_labels)
 
         return chunks
-    
+
 @define
 class EmbeddingSearch(PipelineStep):
     prompt: str = field()
     embedder: OpenAIEmbeddor = field()
     cache_file: str = field()
     embedding_model: str = field()
+    threshold: Optional[float] = field(default=None)
 
     def __attrs_post_init__(self):
         self.embedder = OpenAIEmbeddor(cache_file=None, model=self.embedding_model)
@@ -307,7 +334,7 @@ class EmbeddingSearch(PipelineStep):
         
         # Add scores to chunk attributes
         for chunk, score in zip(chunks, dot_products):
-            chunk.attribs[f"Search:{self.prompt}"] = float(score)
+            chunk.attribs[f"Search:{self.prompt}"] = sharpen(float(score), threshold=self.threshold)
         
         return chunks
 
@@ -397,16 +424,57 @@ class ChunkCollection:
         self.__attrs_post_init__()
 
 # %%
-col = ChunkCollection(chunks=[Chunk(og_text="ba"), Chunk(og_text="ba2")])
+import numpy as np
+import matplotlib.pyplot as plt
 
-# %%
+def crush_and_boost(values, threshold, sharpness=10):
+    """
+    Crush values below the threshold towards 0 and boost values above the threshold towards 1.
+    
+    Args:
+    - values (array-like): Array of input values to transform.
+    - threshold (float): The threshold value for the transformation.
+    - sharpness (float): Controls the steepness of the transition (higher values = sharper transition).
+    
+    Returns:
+    - transformed_values (numpy array): The transformed array.
+    """
+    # Apply a logistic function with a custom threshold
+    values = np.clip(values, 0, 1)
+    
+    # Apply a modified logistic function
+    logistic = 1 / (1 + np.exp(-sharpness * (values - threshold)))
+    
+    # Scale the logistic function to meet the requirements
+    delta = (logistic - 0.5) * np.minimum(values, 1 - values) * 2
+    transformed_values = values + delta
+    
+    # Ensure output values are between 0 and 1
+    transformed_values = np.clip(transformed_values, 0, 1)
+    
+    return transformed_values
 
-col.chunks[0].attribs["next"] = col.chunks[1]
+# Define the range of input values
+x = np.linspace(0, 1, 500)
 
-# %%
+# Parameters for the transformation
+threshold = 0.15
+sharpness = 10
 
-col.chunks[1].attribs["hey"] = 0
-# %%
+# Apply the transformation
+y = crush_and_boost(x, threshold, sharpness)
 
-col.chunks[0]
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(x, y, label=f'Sigmoid-like function (threshold={threshold}, sharpness={sharpness})')
+plt.axvline(threshold, color='red', linestyle='--', label='Threshold')
+plt.axhline(0, color='black', linestyle='--', linewidth=0.5)
+plt.axhline(1, color='black', linestyle='--', linewidth=0.5)
+plt.title('Crush and Boost Function')
+plt.xlabel('Input Value')
+plt.ylabel('Transformed Value')
+plt.legend()
+plt.grid(True)
+plt.show()
+
 # %%
