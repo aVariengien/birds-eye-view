@@ -1,6 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go  # type: ignore
-import plotly.express as px # type: ignore
+import plotly.express as px  # type: ignore
 from core import (
     ChunkCollection,
     Pipeline,
@@ -9,19 +9,30 @@ from core import (
     UMAPReductor,
     Chunk,
     DotProductLabelor,
+    EmbeddingSearch,
 )
-from file_loading import load_files
+import urllib.parse
+from file_loading import load_files, wrap_str
 from prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
 from typing import Optional
+from markdownify import markdownify as md  # type: ignore
 
-from bokeh.plotting import figure # type: ignore
-from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS, Div# type: ignore
-from bokeh.layouts import column, row # type: ignore
+from bokeh.plotting import figure  # type: ignore
+from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS, Div  # type: ignore
+from bokeh.layouts import column, row  # type: ignore
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS, Div, ColorBar, LinearColorMapper
+from bokeh.models import (
+    ColumnDataSource,
+    HoverTool,
+    TapTool,
+    CustomJS,
+    Div,
+    ColorBar,
+    LinearColorMapper,
+)
 from bokeh.layouts import column, row
-from bokeh.palettes import Category10
-from bokeh.transform import factor_cmap
+from bokeh.palettes import Category20, Category10  # type: ignore
+from bokeh.transform import factor_cmap  # type: ignore
 
 
 # Streamlit page configuration
@@ -30,15 +41,27 @@ st.set_page_config(layout="wide")
 # Initialize session state
 if "chunk_collection" not in st.session_state:
     st.session_state.chunk_collection = None
+elif st.session_state.chunk_collection is not None:
+    st.session_state.viz_options = list(
+        set(
+            list(st.session_state.chunk_collection.chunks[0].attribs.keys())
+            + ["page", "chunk_id", "title", "url", "index"]
+        )
+    )
 if "pdf" not in st.session_state:
     st.session_state.chunks = None
     st.session_state.doc_names = None
+if "viz_options" not in st.session_state:
+    st.session_state.viz_options = ["page", "chunk_id", "title", "url", "index"]
 
 # Sidebar
 st.sidebar.title("Configuration")
 
 # File/Cache input
-file_paths = st.sidebar.text_area("Enter file paths or URLs (one per line)", "data/plurality.pdf\ndata/another_file.pdf")
+file_paths = st.sidebar.text_area(
+    "Enter file paths or URLs (one per line)",
+    "https://www.plurality.net/v/chapters/3-1/eng/?mode=dark\nhttps://www.plurality.net/v/chapters/5-0/eng/?mode=dark",
+)
 cache_file = st.sidebar.text_input("Cache file", "cache/cache.json")
 
 # Pipeline code input
@@ -51,19 +74,18 @@ cache_file = st.sidebar.text_input("Cache file", "cache/cache.json")
 #     cache_file=cache_file
 # ),
 
-
+# DotProductLabelor(
+#     possible_labels=ALL_EMOJIS,
+#     nb_labels=3,
+#     cache_file=cache_file,
+#     embedding_model="text-embedding-3-small",
+#     key_name="emoji",
+#     prefix="",
+# ),
 
 pipeline_code = st.sidebar.text_area(
     "Pipeline Code",
     """Pipeline([
-    DotProductLabelor(
-        possible_labels=ALL_EMOJIS,
-        nb_labels=3,
-        cache_file=cache_file,
-        embedding_model="text-embedding-3-small",
-        key_name="emoji",
-        prefix="",
-    ),
     OpenAIEmbeddor(
         model="text-embedding-3-small", 
         cache_file=cache_file,
@@ -86,11 +108,23 @@ if st.sidebar.checkbox("Use all chunks"):
 
 chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=2000, value=400)
 # Visualization options
-vis_options = ["emoji", "page", "chunk_id", "title", "url", "index"]
-vis_field = st.sidebar.selectbox("Visualization Field", vis_options)
+
+vis_field = st.sidebar.selectbox("Visualization Field", st.session_state.viz_options)
+use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors")
 
 # Run pipeline button
 run_pipeline = st.sidebar.button("Run Pipeline")
+
+# Add EmbeddingSearch configuration
+st.sidebar.header("EmbeddingSearch Configuration")
+search_prompt = st.sidebar.text_input("Search Prompt")
+search_model = st.sidebar.selectbox(
+    "Embedding Model",
+    ["text-embedding-3-small", "text-embedding-3-large"],
+    index=0,
+)
+assert search_model is not None
+run_search = st.sidebar.button("Run Search")
 
 # Main content
 st.title("Chunk Map Visualization")
@@ -103,74 +137,185 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code, cache_file
         chunks = st.session_state.chunks[:max_chunk]
     else:
         st.session_state.doc_names = document_names
-        st.session_state.chunks = load_files(document_names.split("\n"), max_chunk=None, chunk_size=chunk_size)
+        st.session_state.chunks = load_files(
+            document_names.split("\n"), max_chunk=None, chunk_size=chunk_size
+        )
         chunks = st.session_state.chunks[:max_chunk]
     pipeline = eval(pipeline_code)
     return ChunkCollection(chunks=chunks, pipeline=pipeline)
 
-use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors")
+
+def make_display_text(chunk: Chunk):
+    """Return a fancy text to display, and the raw text to be used as hover"""
+    text = ""
+    if "title" in chunk.attribs:
+        text += "Title: <i>" + chunk.attribs["title"] + "</i><br><br>"
+    text += chunk.display_text
+    first_words = md(chunk.display_text, convert=[])  # strip all html tags
+    first_words = urllib.parse.quote(" ".join(first_words.split(" ")[:3]))
+    if "url" in chunk.attribs and "http" in chunk.attribs["url"]:
+        text += f"""<br><a href="{chunk.attribs["url"]}#:~:text={first_words}">View source</a>"""
+    if "page" in chunk.attribs:
+        text += f"""<br>Page {chunk.attribs["page"]}"""
+    return text, md(chunk.display_text, convert=[])
 
 
-def visualize_chunks(chunk_collection: ChunkCollection, vis_field: Optional[str], use_qualitative_colors):
-    # Prepare data
-    x = [chunk.x for chunk in chunk_collection.chunks if chunk.x is not None]
-    y = [chunk.y for chunk in chunk_collection.chunks if chunk.y is not None]
-    texts = [chunk.display_text for chunk in chunk_collection.chunks if chunk.x is not None]
-    
-    if vis_field == "chunk_id":
-        display_values = [i for i, chunk in enumerate(chunk_collection.chunks) if chunk.x is not None]
-    elif vis_field != "":
-        display_values = [chunk.attribs.get(vis_field, "") for chunk in chunk_collection.chunks if chunk.x is not None]
-    else:
-        display_values = [""] * len(x)
+def visualize_chunks(
+    chunk_collection: ChunkCollection,
+    vis_field: str,
+    use_qualitative_colors: bool,
+):
+    x = []
+    y = []
+    texts = []
+    hover_texts = []
+    display_values = []
+    prev_chunks = []
+    next_chunks = []
 
+    for i, chunk in enumerate(chunk_collection.chunks):
+        if chunk.x is not None:
+            x.append(chunk.x)
+            y.append(chunk.y)
+            fancy_text, raw_text = make_display_text(chunk)
+            texts.append(fancy_text)
+            hover_texts.append(raw_text)
+            display_values.append(chunk.attribs.get(vis_field, "") if vis_field else "")
+            prev_chunks.append(chunk.previous_chunk_index)
+            next_chunks.append(chunk.next_chunk_index)
+
+    if display_values and type(display_values[0]) == str:
+        display_values = [
+            wrap_str(s, max_line_len=20, skip_line_char="\n") for s in display_values
+        ]
     # Create ColumnDataSource
-    source = ColumnDataSource(data=dict(
-        x=x,
-        y=y,
-        text=texts,
-        display=display_values
-    ))
-
+    source = ColumnDataSource(
+        data=dict(
+            x=x,
+            y=y,
+            text=texts,
+            hover_texts=hover_texts,
+            display=display_values,
+            prev_chunk=prev_chunks,
+            next_chunk=next_chunks,
+        )
+    )
     # Create figure
-    p = figure(width=800, height=600, tools="pan,wheel_zoom,box_zoom,reset", active_scroll="wheel_zoom")
-    
+    height = 600
+    width = 1000
+    p = figure(
+        width=width,
+        height=height,
+        tools="pan,wheel_zoom,box_zoom,reset",
+        active_scroll="wheel_zoom",
+    )
+
+    # p.y_range.start = 0
+    # p.y_range.end = (max(x) - min(x))*(height/width)
+
     if use_qualitative_colors:
         # Use qualitative colors for non-numeric data
         unique_values = list(set(display_values))
-        color_mapper = factor_cmap('display', palette=Category10[10], factors=unique_values)
-        circles = p.circle('x', 'y', size=10, source=source, color=color_mapper, alpha=0.7)
-        color_bar = ColorBar(color_mapper=color_mapper['transform'], width=8, location=(0,0))
-        p.add_layout(color_bar, 'right')
+        color_mapper = factor_cmap(
+            "display",
+            palette=Category20[max(min(len(unique_values), 20), 3)],
+            factors=unique_values,
+        )
+        circles = p.circle(
+            "x", "y", size=10, source=source, color=color_mapper, alpha=0.7
+        )
+        color_bar = ColorBar(
+            color_mapper=color_mapper["transform"],
+            width=8,
+            location=(0, 0),
+            title=wrap_str(vis_field, max_line_len=100, skip_line_char="\n"),
+        )
+        p.add_layout(color_bar, "right")
     else:
         # Use quantitative colors for numeric data or when qualitative is not selected
         if all(isinstance(val, (int, float)) for val in display_values):
-            color_mapper = LinearColorMapper(palette="Viridis256", low=min(display_values), high=max(display_values))
+            color_mapper = LinearColorMapper(
+                palette="Viridis256", low=min(display_values), high=max(display_values)
+            )
         else:
             # Fallback to index-based coloring if data is not numeric
-            color_mapper = LinearColorMapper(palette="Viridis256", low=0, high=len(display_values)-1)
-            source.data['color_index'] = list(range(len(display_values)))
-            
-        circles = p.circle('x', 'y', size=10, source=source, color={'field': 'color_index' if 'color_index' in source.data else 'display', 'transform': color_mapper}, alpha=0.7)
-        color_bar = ColorBar(color_mapper=color_mapper, width=8, location=(0,0))
-        p.add_layout(color_bar, 'right')
+            color_mapper = LinearColorMapper(
+                palette="Viridis256", low=0, high=len(display_values) - 1
+            )
+            source.data["color_index"] = list(range(len(display_values)))
+
+        circles = p.circle(
+            "x",
+            "y",
+            size=10,
+            source=source,
+            color={
+                "field": "color_index" if "color_index" in source.data else "display",
+                "transform": color_mapper,
+            },
+            alpha=0.7,
+        )
+
+        color_bar = ColorBar(
+            color_mapper=color_mapper,
+            width=8,
+            location=(0, 0),
+            title=wrap_str(vis_field, max_line_len=100, skip_line_char="\n"),
+        )
+        p.add_layout(color_bar, "left")
+
+
+
     # Add hover tool
-    hover = HoverTool(renderers=[circles], tooltips=[("Text", "@text")])
+    hover = HoverTool(renderers=[circles], tooltips=[("Text", "@hover_texts")])
     p.add_tools(hover)
 
     # Add tap tool
     p.add_tools(TapTool())
 
     # Create a Div to display the full text
-    text_div = Div(width=200, height=600)
+    text_div = Div(width=10, height=600, text="")
+
+    prev_line = p.line(x=[], y=[], line_color="#ffceb8", line_width=2, visible=False)
+    next_line = p.line(x=[], y=[], line_color="#f75002", line_width=2, visible=False)
 
     # JavaScript callback for click events
-    callback = CustomJS(args=dict(source=source, text_div=text_div), code="""
+    callback = CustomJS(
+        args=dict(
+            source=source, text_div=text_div, prev_line=prev_line, next_line=next_line
+        ),
+        code="""
+
         var index = cb_data.source.selected.indices[0];
-        var text = source.data['text'][index];
-        var display_val = source.data['display'][index];
-        text_div.text = '<div style="background-color: white; padding: 10px; border: 1px solid black;"> Val:'+display_val+'<br><br>' + text + '</div>';
-    """)
+        var text = source.data['text'][index] || '';
+        var display_val = source.data['display'][index] || '';
+        text_div.text = '<div style="background-color: white; padding: 10px; border: 1px solid black;">' + text + '<br>' +  'Display val:'+ display_val +'</div>';
+        text_div.width = 300
+            
+        // Hide previous lines
+        prev_line.visible = false;
+        next_line.visible = false;
+        
+        // Check if previous and next chunks exist
+        var prev_chunk = source.data['prev_chunk'][index];
+        var next_chunk = source.data['next_chunk'][index];
+        
+        if (prev_chunk !== null) {
+            prev_line.data_source.data['x'] = [source.data['x'][index], source.data['x'][prev_chunk]];
+            prev_line.data_source.data['y'] = [source.data['y'][index], source.data['y'][prev_chunk]];
+            prev_line.visible = true;
+        }
+        
+        if (next_chunk !== null) {
+            next_line.data_source.data['x'] = [source.data['x'][index], source.data['x'][next_chunk]];
+            next_line.data_source.data['y'] = [source.data['y'][index], source.data['y'][next_chunk]];
+            next_line.visible = true;
+        }
+        
+        prev_line.data_source.change.emit();
+        next_line.data_source.change.emit();
+        """,
+    )
 
     # Add the callback to the TapTool
     tap_tool = p.select(type=TapTool)[0]
@@ -178,9 +323,9 @@ def visualize_chunks(chunk_collection: ChunkCollection, vis_field: Optional[str]
 
     # Create layout with plot and text div
     layout = row(text_div, p)
-    st.bokeh_chart(layout)
+    st.bokeh_chart(layout, use_container_width=False)
+    p.aspect_ratio = 1
 
-    
 
 # Main logic
 if run_pipeline:
@@ -188,16 +333,32 @@ if run_pipeline:
         st.session_state.chunk_collection = create_chunk_collection(
             file_paths, max_chunk, pipeline_code, cache_file
         )
-        st.info(f"Succesfully created {len(st.session_state.chunk_collection.chunks)} chunks.")
+        st.info(
+            f"Succesfully created {len(st.session_state.chunk_collection.chunks)} chunks."
+        )
         st.session_state.chunk_collection.process_chunks()
 
     st.success("Pipeline completed !")
 
+if run_search and st.session_state.chunk_collection is not None:
+    embedding_search = EmbeddingSearch(
+        prompt=search_prompt,
+        embedder=OpenAIEmbeddor(cache_file=cache_file, model=search_model),
+        cache_file=cache_file,
+        embedding_model=search_model,
+    )
+    st.session_state.chunk_collection.apply_step(embedding_search)
+    vis_field = "Search:" + search_prompt
+    st.success("EmbeddingSearch completed!")
+
 if st.session_state.chunk_collection is not None:
     # Visualize chunks
-    visualize_chunks(st.session_state.chunk_collection, vis_field, use_qualitative_colors)
-    # fig = visualize_chunks(st.session_state.chunk_collection, vis_field)
-    # st.plotly_chart(fig, use_container_width=True)
+    assert type(vis_field) == str
+    visualize_chunks(
+        st.session_state.chunk_collection,
+        vis_field,
+        use_qualitative_colors,
+    )
 else:
     st.info("Click 'Run Pipeline' to process and visualize the chunks.")
 

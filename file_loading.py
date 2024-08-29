@@ -25,7 +25,7 @@ from typing import List, Optional
 import requests  # type: ignore
 from readability import Document  # type: ignore
 from urllib.parse import urlparse
-from markdownify import markdownify as md
+from markdownify import markdownify as md # type: ignore
 
 
 def load_txt(
@@ -47,7 +47,7 @@ def load_txt(
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
-        chunk_overlap=int(chunk_size * 0.2),
+        chunk_overlap=0,
         length_function=len,
         is_separator_regex=False,
     )
@@ -103,7 +103,7 @@ def import_pdf(
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
-        chunk_overlap=int(chunk_size * 0.2),
+        chunk_overlap=0,
         length_function=len,
         is_separator_regex=False,
     )
@@ -220,7 +220,7 @@ def load_url(
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
-        chunk_overlap=int(chunk_size * 0.2),
+        chunk_overlap=0,
         length_function=len,
         is_separator_regex=False,
     )

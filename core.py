@@ -16,6 +16,7 @@ from prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT
 import threading
 import json
 import markdown # type: ignore
+import time
 
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
@@ -46,11 +47,13 @@ class Chunk:
     )  # the text after / during the pre-embedding processing
     display_text: str = field(default="")
     attribs: dict = field(factory=dict)  # other attributes
+    id: int = field(default=-1)
+    previous_chunk_index: int = field(default=-1)
+    next_chunk_index: int = field(default=-1)
 
     def __attrs_post_init__(self):
         self.text = self.og_text
         self.display_text = make_display_text(self.text)
-
 
 class PipelineStep:
     """A mother class for all process steps."""
@@ -182,12 +185,15 @@ class OpenAIEmbeddor(PipelineStep):
 
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
+            t1 = time.time()
             response = self.client.embeddings.create(input=batch, model=self.model)
+            print(f"Time for request: {time.time() - t1}")
             batch_embeddings = [np.array(data.embedding) for data in response.data]
             all_embeddings.extend(batch_embeddings)
         return all_embeddings
 
     def load_cache(self):
+        t1 = time.time()
         try:
             with open(self.cache_file, "r") as f:
                 self.cache = json.load(f)
@@ -199,6 +205,7 @@ class OpenAIEmbeddor(PipelineStep):
             print(
                 f"Error decoding cache file {self.cache_file}. Starting with an empty cache."
             )
+        print(f"Time to load: {time.time() - t1}")
 
     def save_cache(self):
         if self.cache_file:
@@ -274,6 +281,35 @@ class DotProductLabelor(PipelineStep):
             chunk.attribs[self.key_name] = " ".join(top_labels)
 
         return chunks
+    
+@define
+class EmbeddingSearch(PipelineStep):
+    prompt: str = field()
+    embedder: OpenAIEmbeddor = field()
+    cache_file: str = field()
+    embedding_model: str = field()
+
+    def __attrs_post_init__(self):
+        self.embedder = OpenAIEmbeddor(cache_file=None, model=self.embedding_model)
+
+    def process(self, chunks: List[Chunk]) -> List[Chunk]:
+        # Compute prompt embedding
+        t1 = time.time()
+        prompt_embedding = self.embedder.get_embeddings([self.prompt])[0]
+        print(f"Time to compute embedding {time.time() - t1}")
+        chunk_embeddings = [chunk.embedding for chunk in chunks if chunk.embedding is not None]
+        
+        if not chunk_embeddings:
+            raise ValueError("No embeddings found in chunks. Make sure to run the embedding step first.")
+        
+        # Compute dot products
+        dot_products = np.dot(np.array(chunk_embeddings), prompt_embedding)
+        
+        # Add scores to chunk attributes
+        for chunk, score in zip(chunks, dot_products):
+            chunk.attribs[f"Search:{self.prompt}"] = float(score)
+        
+        return chunks
 
 @define
 class UMAPReductor(PipelineStep):
@@ -340,5 +376,37 @@ class ChunkCollection:
     )  # Is exported as [{og_text: "example", attribs: {"page":2, "title": "bla"}}, ...]
     pipeline: Pipeline = field(factory=Pipeline)
 
+    def __attrs_post_init__(self):
+        for i, chunk in enumerate(self.chunks):
+            if i < len(self.chunks)-1:
+                chunk.next_chunk_index = i+1
+            else:
+                chunk.next_chunk_index = i
+            if i>0:
+                chunk.previous_chunk_index = i-1
+            else:
+                chunk.previous_chunk_index = i
+                
+            chunk.id = i
+
     def process_chunks(self) -> None:
         self.chunks = self.pipeline.process(self.chunks)
+        self.__attrs_post_init__()
+    def apply_step(self, step: PipelineStep):
+        self.chunks = step.process(self.chunks)
+        self.__attrs_post_init__()
+
+# %%
+col = ChunkCollection(chunks=[Chunk(og_text="ba"), Chunk(og_text="ba2")])
+
+# %%
+
+col.chunks[0].attribs["next"] = col.chunks[1]
+
+# %%
+
+col.chunks[1].attribs["hey"] = 0
+# %%
+
+col.chunks[0]
+# %%
