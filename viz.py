@@ -104,8 +104,8 @@ pipeline_code = st.sidebar.text_area(
     ),
     UMAPReductor(
         verbose=True,
-        n_neighbors=40,
-        min_dist=0.1,
+        n_neighbors=20,
+        min_dist=0.05,
         random_state=42,
         n_jobs=1,
     ),
@@ -114,7 +114,7 @@ pipeline_code = st.sidebar.text_area(
 
 # Max chunk slider
 max_chunk = st.sidebar.slider("Max Chunks", min_value=10, max_value=2000, value=100)
-if st.sidebar.checkbox("Use all chunks"):
+if st.sidebar.checkbox("Use all chunks", value=True):
     max_chunk = None
 
 chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=2000, value=400)
@@ -157,7 +157,7 @@ assert embedding_model is not None
 run_search = st.sidebar.button("Run Search")
 
 # Main content
-st.title("🐦‍⬛ Bird's eye view")
+st.title("🦉 Bird's eye view")
 
 
 # Function to create ChunkCollection
