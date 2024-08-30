@@ -39,6 +39,8 @@ You need to have `OPENAI_API_KEY` defined in your environment variables. I advis
 
 The project is in very early stage, and will probably show errors, e.g. if you tick `Use qualitative colors` but display a continuous value (e.g. search results).
 
+**Price:** The large embedding model is at $0.130 / 1M tokens. A 400 character chunks is ~ 80 tokens. So a corpus of 1000 chunks is ~ $0.01. Given how cheap it is, I'd advise using the large embedding model over the small one.
+
 ## Walkthrough
 
 The maps are created by dividing each text into chunks, and using OpenAI embeddings models followed by UMAP to reduce the dimension. You can customize the pipeline in the configuration side pannel.
