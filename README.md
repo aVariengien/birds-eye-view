@@ -33,7 +33,7 @@ The goal of **🦉 Bird's Eye View** is to create a maps of this space, enabling
 ```
 pip install -r requirements.txt
 touch cache/cache.json
-streamlit run main.py
+streamlit run viz.py
 ```
 
 You need to have `OPENAI_API_KEY` defined in your environment variables. I advise adding `export OPENAI_API_KEY=sk-...` in your `.bashrc`.
