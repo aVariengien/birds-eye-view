@@ -143,6 +143,23 @@ use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors")
 # Run pipeline button
 run_pipeline = st.sidebar.button("Run Pipeline")
 
+
+
+# Main content
+st.title("🦉 Bird's eye view")
+
+def update_search():
+    embedding_search = EmbeddingSearch(
+        prompt=search_prompt,
+        threshold=search_threshold,
+        cache_file=cache_file,
+        embedding_model=embedding_model,
+    )
+    st.session_state.chunk_collection.apply_step(embedding_search)
+    st.session_state.vis_field = "Search:" + search_prompt
+    st.success("EmbeddingSearch completed!")
+
+
 # Add EmbeddingSearch configuration
 st.sidebar.header("EmbeddingSearch Configuration")
 search_prompt = st.sidebar.text_area(
@@ -150,15 +167,11 @@ search_prompt = st.sidebar.text_area(
 )
 
 search_threshold = st.sidebar.slider(
-    "Search Threshold", min_value=0.0, max_value=1.0, value=0.2, step=0.01
+    "Search Threshold", min_value=0.0, max_value=1.0, value=0.2, step=0.01, on_change=update_search
 )
 
 assert embedding_model is not None
 run_search = st.sidebar.button("Run Search")
-
-# Main content
-st.title("🦉 Bird's eye view")
-
 
 # Function to create ChunkCollection
 def create_chunk_collection(document_names, max_chunk, pipeline_code, cache_file):
@@ -378,23 +391,7 @@ if run_pipeline:
 import numpy as np
 
 if run_search and st.session_state.chunk_collection is not None:
-    embedding_search = EmbeddingSearch(
-        prompt=search_prompt,
-        threshold=search_threshold,
-        embedder=OpenAIEmbeddor(cache_file=cache_file, model=embedding_model),
-        cache_file=cache_file,
-        embedding_model=embedding_model,
-    )
-    st.session_state.chunk_collection.apply_step(embedding_search)
-    st.session_state.vis_field = "Search:" + search_prompt
-    st.success("EmbeddingSearch completed!")
-
-    print(
-        np.dot(
-            st.session_state.chunk_collection.chunks[0].embedding,
-            st.session_state.chunk_collection.chunks[1].embedding,
-        )
-    )
+    update_search()
 
 if st.session_state.chunk_collection is not None:
     # Visualize chunks

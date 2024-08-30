@@ -231,7 +231,7 @@ class OpenAIEmbeddor(PipelineStep):
             print(
                 f"Error decoding cache file {self.cache_file}. Starting with an empty cache."
             )
-        print(f"Time to load: {time.time() - t1}")
+        print(f"Time to load: {time.time() - t1}, {self.cache_file}")
 
     def save_cache(self):
         if self.cache_file:
@@ -311,31 +311,36 @@ class DotProductLabelor(PipelineStep):
 @define
 class EmbeddingSearch(PipelineStep):
     prompt: str = field()
-    embedder: OpenAIEmbeddor = field()
     cache_file: str = field()
     embedding_model: str = field()
     threshold: Optional[float] = field(default=None)
+    embedder: Optional[OpenAIEmbeddor] = field(default=None)
 
     def __attrs_post_init__(self):
         self.embedder = OpenAIEmbeddor(cache_file=None, model=self.embedding_model)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         # Compute prompt embedding
+        assert self.embedder is not None
         t1 = time.time()
-        prompt_embedding = self.embedder.get_embeddings([self.prompt])[0]
+        if f"RawSearch:{self.prompt}" not in chunks[0].attribs:
+            prompt_embedding = self.embedder.get_embeddings([self.prompt])[0]
+            chunk_embeddings = [chunk.embedding for chunk in chunks if chunk.embedding is not None]
+            
+            if not chunk_embeddings:
+                raise ValueError("No embeddings found in chunks. Make sure to run the embedding step first.")
+            
+            # Compute dot products
+            dot_products = np.dot(np.array(chunk_embeddings), prompt_embedding)
+            
+            # Add scores to chunk attributes
+            for chunk, score in zip(chunks, dot_products):
+                chunk.attribs[f"Search:{self.prompt}"] = sharpen(float(score), threshold=self.threshold)
+                chunk.attribs[f"RawSearch:{self.prompt}"] = float(score)
+        else:
+            for chunk in chunks:
+                chunk.attribs[f"Search:{self.prompt}"] = sharpen(float(chunk.attribs[f"RawSearch:{self.prompt}"]), threshold=self.threshold)
         print(f"Time to compute embedding {time.time() - t1}")
-        chunk_embeddings = [chunk.embedding for chunk in chunks if chunk.embedding is not None]
-        
-        if not chunk_embeddings:
-            raise ValueError("No embeddings found in chunks. Make sure to run the embedding step first.")
-        
-        # Compute dot products
-        dot_products = np.dot(np.array(chunk_embeddings), prompt_embedding)
-        
-        # Add scores to chunk attributes
-        for chunk, score in zip(chunks, dot_products):
-            chunk.attribs[f"Search:{self.prompt}"] = sharpen(float(score), threshold=self.threshold)
-        
         return chunks
 
 @define
