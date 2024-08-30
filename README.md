@@ -1,8 +1,9 @@
 # 🦉 Bird's Eye View
 
-![image](img/plan-of-Imola.jpg)
-_A city plan of Imola by Leonardo Da Vinci_.
 
+<img src="img/plan-of-Imola.jpg" alt="drawing" width="500"/>
+
+_A city plan of Imola by Leonardo Da Vinci_.
 
 
 ## Introduction
@@ -29,9 +30,11 @@ The goal of **🦉 Bird's Eye View** is to create a maps of this space, enabling
 
 ## Setup
 
-``pip install -r requirements.txt``
-``touch cache/cache.json``
-``streamlit run main.py``
+```
+pip install -r requirements.txt
+touch cache/cache.json
+streamlit run main.py
+```
 
 You need to have `OPENAI_API_KEY` defined in your environment variables. I advise adding `export OPENAI_API_KEY=sk-...` in your `.bashrc`.
 
