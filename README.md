@@ -5,7 +5,6 @@
 
 _A city plan of Imola by Leonardo Da Vinci_.
 
-
 ## Introduction
 
 In August 1502, Leonardo Da Vinci, was appointed by Cesare Borgia to survey the city of Imola to strengthen its fortifications. 
@@ -37,6 +36,8 @@ streamlit run viz.py
 ```
 
 You need to have `OPENAI_API_KEY` defined in your environment variables. I advise adding `export OPENAI_API_KEY=sk-...` in your `.bashrc`.
+
+The project is in very early stage, and will probably show errors, e.g. if you tick `Use qualitative colors` but display a continuous value (e.g. search results).
 
 ## Walkthrough
 
@@ -75,9 +76,9 @@ OK, the guess was good! It seems to light up the points in this cluster, but als
 
 It also mentions jailbreaking. From reading the points in the cluster, the text seems to emphasize how easy it is to jailbreak models, whereas this point is mentioning jailbreaking in another context. 
 
-Let's refine the prompt, we try `All AI models can be jailbroken`.
+Let's refine the prompt, we'll try `All AI models can be jailbroken`.
 
-![image](img/negative-point.png)
+![image](img/second-search.png)
 
 It seems a bit more specific, the previous outlier point lights up much less.
 
