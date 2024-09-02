@@ -39,7 +39,7 @@ from bokeh.transform import factor_cmap  # type: ignore
 st.set_page_config(layout="wide")
 
 
-DEFAULT_VIS_FIELD = ["doc_position", "page", "chunk_id", "title", "url", "index"]
+DEFAULT_VIS_FIELD = ["title", "doc_position", "page", "chunk_id", "url", "index"]
 # Initialize session state
 if "chunk_collection" not in st.session_state:
     st.session_state.chunk_collection = None
@@ -58,6 +58,7 @@ if "viz_options" not in st.session_state:
 
 if "vis_field" not in st.session_state:
     st.session_state.vis_field = DEFAULT_VIS_FIELD[0]
+
 
 # Sidebar
 st.sidebar.title("Configuration")
@@ -121,7 +122,7 @@ chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=2000, value
 # Visualization options
 embedding_model = st.sidebar.selectbox(
     "Embedding Model",
-    ["text-embedding-3-small", "text-embedding-3-large"],
+    ["text-embedding-3-large", "text-embedding-3-small"],
     index=0,
 )
 
@@ -138,8 +139,8 @@ st.session_state.vis_field = st.sidebar.selectbox(
         "" if st.session_state.vis_field is None else st.session_state.vis_field
     ),
 )
-use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors")
-
+use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors", 
+                                             value=True)
 # Run pipeline button
 run_pipeline = st.sidebar.button("Run Pipeline")
 
@@ -190,18 +191,29 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code, cache_file
 
 def make_display_text(chunk: Chunk, vis_field: str):
     """Return a fancy text to display, and the raw text to be used as hover"""
-    text = ""
+
+    page = ""
+    title = ""
+    view_source = ""
+    headings = ""
+
     if "title" in chunk.attribs:
-        text += "Title: <i>" + chunk.attribs["title"] + "</i><br><br>"
-    text += chunk.display_text
+        title = "Title: <i>" + chunk.attribs["title"] + "</i><br><br>"
+
     first_words = md(chunk.display_text, convert=[])  # strip all html tags
     first_words = urllib.parse.quote(" ".join(first_words.split(" ")[:3]))
     if "url" in chunk.attribs and "http" in chunk.attribs["url"]:
-        text += f"""<br><a href="{chunk.attribs["url"]}#:~:text={first_words}">View source</a>"""
-    if "page" in chunk.attribs:
-        text += f"""<br>Page {chunk.attribs["page"]}"""
+        view_source = f"""<br><a href="{chunk.attribs["url"]}#:~:text={first_words}">View source</a>"""
 
-    text += f"""<br><br>{vis_field}: {chunk.attribs[vis_field]}"""
+    if "page" in chunk.attribs:
+        page = f"""<br>Page {chunk.attribs["page"]}"""
+
+    if "headings" in chunk.attribs:
+        headings = "<br> <b>"+ "<br>>".join(chunk.attribs["headings"]) + "</b><br><br>"
+
+    vis_field_value = f"""<br><br>{vis_field}: {chunk.attribs[vis_field]}"""
+
+    text = f"{title}{headings}{chunk.display_text}{view_source}{page}{vis_field_value}"
 
     raw_text = (
         md(chunk.display_text, convert=[])
@@ -233,6 +245,9 @@ def visualize_chunks(
             display_values.append(chunk.attribs.get(vis_field, "") if vis_field else "")
             prev_chunks.append(chunk.previous_chunk_index)
             next_chunks.append(chunk.next_chunk_index)
+
+    if type(display_values[0]) == list:
+        display_values = [str(l) for l in display_values]
 
     if display_values and type(display_values[0]) == str:
         display_values = [
@@ -399,7 +414,7 @@ if st.session_state.chunk_collection is not None:
     visualize_chunks(
         st.session_state.chunk_collection,
         st.session_state.vis_field,
-        use_qualitative_colors,
+        use_qualitative_colors if not run_search else False,
     )
 else:
     st.info("Click 'Run Pipeline' to process and visualize the chunks.")

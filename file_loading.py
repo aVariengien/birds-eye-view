@@ -25,8 +25,14 @@ from typing import List, Optional
 import requests  # type: ignore
 from readability import Document  # type: ignore
 from urllib.parse import urlparse
-from markdownify import markdownify as md # type: ignore
+from markdownify import markdownify as md  # type: ignore
+from typing import List
+import re
+from bs4 import BeautifulSoup # type: ignore
+import html2text
+import markdown # type: ignore
 
+## from txt
 
 def load_txt(
     file_name: str, max_chunk: Optional[int] = 100, chunk_size: int = 800
@@ -60,6 +66,7 @@ def load_txt(
     chunks = [Chunk(og_text=text) for text in texts]
     return chunks
 
+## from pdf
 
 def find_page_number(idx: int, indices: List[int]) -> int:
     """idx is an int. indices is the list of the indices where the page starts.
@@ -117,7 +124,13 @@ def import_pdf(
 
     chunks = [
         Chunk(
-            og_text=text, attribs={"page": page_nb[i], "index": i,"doc_position":i/len(texts), "title": file_name}
+            og_text=text,
+            attribs={
+                "page": page_nb[i],
+                "index": i,
+                "doc_position": i / len(texts),
+                "title": file_name,
+            },
         )
         for i, text in enumerate(texts)
     ]
@@ -163,9 +176,77 @@ def download_pdf(url: str, cache_folder: str = "cache/pdf") -> str:
     print(f"PDF downloaded and saved to: {file_path}")
     return file_path
 
+## from url
+
+def get_heading_list(content: str, idx: int, markdown: bool = False) -> List[str]:
+    """Given a document content (markdown or html), return the list of heading that covers the text at the string position idx"""
+    if markdown:
+        return get_markdown_headings(content, idx)
+    else:
+        return get_html_headings(content, idx)
+
+def get_markdown_headings(content: str, idx: int) -> List[str]:
+    headings = [] #type: List[str]
+    current_level = 0
+    lines = content.split('\n')
+    current_position = 0
+
+    for line in lines:
+        line_length = len(line) + 1  # +1 for the newline character
+        if current_position + line_length > idx:
+            break
+
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            heading_text = heading_match.group(2).strip()
+
+            while current_level >= level:
+                if headings:
+                    headings.pop()
+                current_level -= 1
+
+            headings.append(heading_text)
+            current_level = level
+
+        current_position += line_length
+
+    return headings
+
+def get_html_headings(content: str, idx: int) -> List[str]:
+    headings = [] #type: List[str]
+    current_position = 0
+    heading_pattern = re.compile(r'<h([1-6]).*?>(.*?)</h\1>', re.DOTALL)
+    
+    for match in heading_pattern.finditer(content):
+        start, end = match.span()
+        if start > idx:
+            break
+        
+        level = int(match.group(1))
+        heading_text = re.sub(r'<.*?>', '', match.group(2)).strip()
+        
+        while len(headings) >= level:
+            headings.pop()
+        
+        headings.append(heading_text)
+        current_position = end
+    return headings
+
+
+def remove_script_tags(html_content):
+    """Return the document without script tag."""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    script_tags = soup.find_all('script')
+    for tag in script_tags:
+        tag.decompose()
+    return str(soup)
 
 def load_url(
-    url: str, max_chunk: Optional[int] = 100, chunk_size: int = 800, markdownify: bool = False
+    url: str,
+    max_chunk: Optional[int] = 100,
+    chunk_size: int = 800,
+    markdownify: bool = False,
 ) -> List[Chunk]:
     """
     Load content from a URL and split it into chunks.
@@ -185,7 +266,8 @@ def load_url(
     doc = Document(response.content)
 
     title = doc.title()
-    content = doc.summary()
+    content = markdown.markdown(html2text.html2text(remove_script_tags(response.content)))
+
     if markdownify:
         content = md(
             content,
@@ -230,10 +312,22 @@ def load_url(
     if max_chunk is not None:
         texts = texts[:max_chunk]
 
-    chunks = [
-        Chunk(og_text=text, attribs={"title": title, "url": url, "index": i, "doc_position":i/len(texts)})
-        for i, text in enumerate(texts)
-    ]
+    chunks = []
+    for i, text in enumerate(texts):
+        idx = content.find(text)
+        chunks.append(
+            Chunk(
+                og_text=text,
+                attribs={
+                    "title": title,
+                    "url": url,
+                    "index": i,
+                    "doc_position": i / len(texts),
+                    "headings": get_heading_list(content, idx, markdown = markdownify)[::]
+                },
+            )
+        )
+
     return chunks
 
 
