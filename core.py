@@ -428,58 +428,58 @@ class ChunkCollection:
         self.chunks = step.process(self.chunks)
         self.__attrs_post_init__()
 
-# %%
-import numpy as np
-import matplotlib.pyplot as plt
+# # %%
+# import numpy as np
+# import matplotlib.pyplot as plt
 
-def crush_and_boost(values, threshold, sharpness=10):
-    """
-    Crush values below the threshold towards 0 and boost values above the threshold towards 1.
+# def crush_and_boost(values, threshold, sharpness=10):
+#     """
+#     Crush values below the threshold towards 0 and boost values above the threshold towards 1.
     
-    Args:
-    - values (array-like): Array of input values to transform.
-    - threshold (float): The threshold value for the transformation.
-    - sharpness (float): Controls the steepness of the transition (higher values = sharper transition).
+#     Args:
+#     - values (array-like): Array of input values to transform.
+#     - threshold (float): The threshold value for the transformation.
+#     - sharpness (float): Controls the steepness of the transition (higher values = sharper transition).
     
-    Returns:
-    - transformed_values (numpy array): The transformed array.
-    """
-    # Apply a logistic function with a custom threshold
-    values = np.clip(values, 0, 1)
+#     Returns:
+#     - transformed_values (numpy array): The transformed array.
+#     """
+#     # Apply a logistic function with a custom threshold
+#     values = np.clip(values, 0, 1)
     
-    # Apply a modified logistic function
-    logistic = 1 / (1 + np.exp(-sharpness * (values - threshold)))
+#     # Apply a modified logistic function
+#     logistic = 1 / (1 + np.exp(-sharpness * (values - threshold)))
     
-    # Scale the logistic function to meet the requirements
-    delta = (logistic - 0.5) * np.minimum(values, 1 - values) * 2
-    transformed_values = values + delta
+#     # Scale the logistic function to meet the requirements
+#     delta = (logistic - 0.5) * np.minimum(values, 1 - values) * 2
+#     transformed_values = values + delta
     
-    # Ensure output values are between 0 and 1
-    transformed_values = np.clip(transformed_values, 0, 1)
+#     # Ensure output values are between 0 and 1
+#     transformed_values = np.clip(transformed_values, 0, 1)
     
-    return transformed_values
+#     return transformed_values
 
-# Define the range of input values
-x = np.linspace(0, 1, 500)
+# # Define the range of input values
+# x = np.linspace(0, 1, 500)
 
-# Parameters for the transformation
-threshold = 0.15
-sharpness = 10
+# # Parameters for the transformation
+# threshold = 0.15
+# sharpness = 10
 
-# Apply the transformation
-y = crush_and_boost(x, threshold, sharpness)
+# # Apply the transformation
+# y = crush_and_boost(x, threshold, sharpness)
 
-# Plotting
-plt.figure(figsize=(10, 6))
-plt.plot(x, y, label=f'Sigmoid-like function (threshold={threshold}, sharpness={sharpness})')
-plt.axvline(threshold, color='red', linestyle='--', label='Threshold')
-plt.axhline(0, color='black', linestyle='--', linewidth=0.5)
-plt.axhline(1, color='black', linestyle='--', linewidth=0.5)
-plt.title('Crush and Boost Function')
-plt.xlabel('Input Value')
-plt.ylabel('Transformed Value')
-plt.legend()
-plt.grid(True)
-plt.show()
+# # Plotting
+# plt.figure(figsize=(10, 6))
+# plt.plot(x, y, label=f'Sigmoid-like function (threshold={threshold}, sharpness={sharpness})')
+# plt.axvline(threshold, color='red', linestyle='--', label='Threshold')
+# plt.axhline(0, color='black', linestyle='--', linewidth=0.5)
+# plt.axhline(1, color='black', linestyle='--', linewidth=0.5)
+# plt.title('Crush and Boost Function')
+# plt.xlabel('Input Value')
+# plt.ylabel('Transformed Value')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 
-# %%
+# # %%
