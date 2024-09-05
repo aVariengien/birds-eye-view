@@ -39,6 +39,52 @@ from bokeh.plotting import figure, output_file, save
 from streamlit.components.v1 import html
 import os
 
+import pickle
+
+
+# Ensure the 'saved_collections' directory exists
+if not os.path.exists("saved_collections"):
+    os.makedirs("saved_collections")
+
+
+def save_bokeh_plot(plot, filename):
+    if not filename.endswith(".html"):
+        filename += ".html"
+
+    # Ensure the 'plots' directory exists
+    if not os.path.exists("plots"):
+        os.makedirs("plots")
+
+    full_path = os.path.join("plots", filename)
+
+    # Generate standalone HTML file
+    html = file_html(plot, CDN, "My Plot")
+
+    # Save the HTML to a file
+    with open(full_path, "w") as f:
+        f.write(html)
+
+    return full_path
+
+
+# Function to save the chunk collection
+def save_chunk_collection(collection, filename):
+    if not filename.endswith(".pkl"):
+        filename += ".pkl"
+    full_path = os.path.join("saved_collections", filename)
+    with open(full_path, "wb") as f:
+        pickle.dump(collection, f)
+    return full_path
+
+
+# Function to load the chunk collection
+def load_chunk_collection(filename):
+    if not filename.endswith(".pkl"):
+        filename += ".pkl"
+    full_path = os.path.join("saved_collections", filename)
+    with open(full_path, "rb") as f:
+        return pickle.load(f)
+
 
 def update_search():
     embedding_search = EmbeddingSearch(
@@ -50,6 +96,7 @@ def update_search():
     st.session_state.chunk_collection.apply_step(embedding_search)
     st.session_state.vis_field = "Search:" + search_prompt
     st.success("EmbeddingSearch completed!")
+
 
 # Function to create ChunkCollection
 def create_chunk_collection(document_names, max_chunk, pipeline_code, cache_file):
@@ -90,9 +137,7 @@ def make_display_text(chunk: Chunk, vis_field: str):
 
     vis_field_value = f"""<br><br>{vis_field}: {chunk.attribs[vis_field]}"""
 
-    text = (
-        f"{title}{headings}{chunk.display_text}{view_source}{page}{vis_field_value}"
-    )
+    text = f"{title}{headings}{chunk.display_text}{view_source}{page}{vis_field_value}"
 
     raw_text = (
         md(chunk.display_text, convert=[])
@@ -143,7 +188,7 @@ def visualize_chunks(
             display=display_values,
             prev_chunk=prev_chunks,
             next_chunk=next_chunks,
-            active_chunk=[-1]*len(prev_chunks),
+            active_chunk=[-1] * len(prev_chunks),
         )
     )
     # Create figure
@@ -158,6 +203,11 @@ def visualize_chunks(
 
     # p.y_range.start = 0
     # p.y_range.end = (max(x) - min(x))*(height/width)
+    if (
+        all(isinstance(val, (float)) for val in display_values)
+        or len(set([val for val in display_values])) > 30
+    ):
+        use_qualitative_colors = False
 
     if use_qualitative_colors:
         # Use qualitative colors for non-numeric data
@@ -222,8 +272,14 @@ def visualize_chunks(
     text_div = Div(width=300, height=600, text="", id="active-chunk-div")
 
     # Create multiple lines for previous and next connections
-    prev_lines = [p.line(x=[], y=[], line_color="#ffceb8", line_width=2, visible=False) for _ in range(n_connections)]
-    next_lines = [p.line(x=[], y=[], line_color="#f75002", line_width=2, visible=False) for _ in range(n_connections)]
+    prev_lines = [
+        p.line(x=[], y=[], line_color="#ffceb8", line_width=2, visible=False)
+        for _ in range(n_connections)
+    ]
+    next_lines = [
+        p.line(x=[], y=[], line_color="#f75002", line_width=2, visible=False)
+        for _ in range(n_connections)
+    ]
 
     common_js_code = """
     function updateActiveChunk(source, text_div, prev_lines, next_lines, new_active_index, n_connections) {
@@ -286,12 +342,13 @@ def visualize_chunks(
             text_div=text_div,
             prev_lines=prev_lines,
             next_lines=next_lines,
-            n_connections=n_connections
+            n_connections=n_connections,
         ),
-        code=common_js_code + """
+        code=common_js_code
+        + """
         var index = cb_data.source.selected.indices[0];
         updateActiveChunk(source, text_div, prev_lines, next_lines, index, n_connections);
-        """
+        """,
     )
 
     go_previous = CustomJS(
@@ -300,16 +357,17 @@ def visualize_chunks(
             text_div=text_div,
             prev_lines=prev_lines,
             next_lines=next_lines,
-            n_connections=n_connections
+            n_connections=n_connections,
         ),
-        code=common_js_code + """
+        code=common_js_code
+        + """
             var active_index = source.data['active_chunk'][0];
             if (active_index >= 0) {
                 var prev_chunk = source.data['prev_chunk'][active_index];
                 updateActiveChunk(source, text_div, prev_lines, next_lines, prev_chunk, n_connections);
                 source.data['active_index'][0] = prev_chunk
             }
-        """
+        """,
     )
 
     go_next = CustomJS(
@@ -318,16 +376,17 @@ def visualize_chunks(
             text_div=text_div,
             prev_lines=prev_lines,
             next_lines=next_lines,
-            n_connections=n_connections
+            n_connections=n_connections,
         ),
-        code=common_js_code + """
+        code=common_js_code
+        + """
             var active_index = source.data['active_chunk'][0];
             if (active_index >= 0) {
                 var next_chunk = source.data['next_chunk'][active_index];
                 updateActiveChunk(source, text_div, prev_lines, next_lines, next_chunk, n_connections);
                 source.data['active_index'][0] = next_chunk
             }
-        """
+        """,
     )
     button_left = Button(label="⬅️", width=50)
     button_left.js_on_click(go_previous)
@@ -345,27 +404,6 @@ def visualize_chunks(
     st.session_state.bokeh_plot = layout
     st.bokeh_chart(layout, use_container_width=False)
     p.aspect_ratio = 1
-    
-
-def save_bokeh_plot(plot, filename):
-    if not filename.endswith('.html'):
-        filename += '.html'
-
-    # Ensure the 'plots' directory exists
-    if not os.path.exists('plots'):
-        os.makedirs('plots')
-
-    full_path = os.path.join('plots', filename)
-
-    # Generate standalone HTML file
-    html = file_html(plot, CDN, "My Plot")
-
-    # Save the HTML to a file
-    with open(full_path, 'w') as f:
-        f.write(html)
-
-    return full_path
-
 
 
 DEFAULT_VIS_FIELD = ["title", "doc_position", "page", "url", "index"]
@@ -386,14 +424,8 @@ elif st.session_state.chunk_collection is not None:
     )
 
 
-
-
 # Main content
-st.set_page_config(
-    page_title="🦉 Bird's eye view",
-    page_icon="🦉",
-    layout="wide"
-)
+st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="wide")
 
 # Sidebar
 st.sidebar.title("Configuration")
@@ -479,25 +511,15 @@ st.session_state.vis_field = st.sidebar.selectbox(
 
 run_pipeline = st.sidebar.button("Run Pipeline")
 
+# Additional information
+st.sidebar.info("Hover over points to see chunk text. Click to highlight a chunk.")
+
+
 use_qualitative_colors = st.sidebar.checkbox("Use qualitative colors", value=True)
 
-n_connections = st.sidebar.slider(label="Path depth",min_value=1, max_value=20, step=1, value=5)
-
-# Text input for plot name
-plot_name = st.sidebar.text_input("Plot name:", "my_plot")
-
-# Button to save the plot
-if st.sidebar.button("Save Plot"):
-    if st.session_state.bokeh_plot is not None:
-        try:
-            saved_path = save_bokeh_plot(st.session_state.bokeh_plot, plot_name)
-            st.success(f"Plot saved successfully as {saved_path}")
-        except Exception as e:
-            st.error(f"An error occurred while saving the plot: {str(e)}")
-    else:
-        st.warning("No plot available to save. Please create a plot first.")
-    print(st.session_state.bokeh_plot)
-
+n_connections = st.sidebar.slider(
+    label="Path depth", min_value=1, max_value=20, step=1, value=5
+)
 
 # Add EmbeddingSearch configuration
 st.sidebar.header("EmbeddingSearch Configuration")
@@ -536,7 +558,7 @@ if run_search and st.session_state.chunk_collection is not None:
     update_search()
 
 
-if st.session_state.chunk_collection is not None: # and refresh:
+if st.session_state.chunk_collection is not None:  # and refresh:
     # Visualize chunks
     assert type(st.session_state.vis_field) == str
     visualize_chunks(
@@ -548,5 +570,54 @@ if st.session_state.chunk_collection is not None: # and refresh:
 elif st.session_state.chunk_collection is None:
     st.info("Click 'Run Pipeline' to process and visualize the chunks.")
 
-# Additional information
-st.sidebar.info("Hover over points to see chunk text.")
+
+st.sidebar.header("Manage Chunk Collection")
+save_name = st.sidebar.text_input("Enter name to save:", "my_collection")
+
+if st.sidebar.button("💾 Save Collection"):
+    if (
+        "chunk_collection" in st.session_state
+        and st.session_state.chunk_collection is not None
+    ):
+        try:
+            saved_path = save_chunk_collection(
+                st.session_state.chunk_collection, save_name
+            )
+            st.success(f"Collection saved successfully as {saved_path}")
+        except Exception as e:
+            st.error(f"An error occurred while saving the collection: {str(e)}")
+    else:
+        st.warning("No chunk collection available to save.")
+
+# Load section
+load_name = st.sidebar.text_input("Enter name to load:", "my_collection")
+
+if st.sidebar.button("⬆️ Load Collection"):
+    try:
+        loaded_collection = load_chunk_collection(load_name)
+        st.session_state.chunk_collection = loaded_collection
+        st.success(f"Collection '{load_name}' loaded successfully!")
+        st.rerun()
+    except FileNotFoundError:
+        st.error(
+            f"File '{load_name}.pkl' not found in the 'saved_collections' directory."
+        )
+    except Exception as e:
+        st.error(f"An error occurred while loading the collection: {str(e)}")
+
+
+# Text input for plot name
+st.sidebar.header("📊 Save Interactive Plot")
+plot_name = st.sidebar.text_input("Plot name:", "my_plot")
+
+# Button to save the plot
+if st.sidebar.button("📊 Save Plot"):
+    if st.session_state.bokeh_plot is not None:
+        try:
+            saved_path = save_bokeh_plot(st.session_state.bokeh_plot, plot_name)
+            st.success(f"Plot saved successfully as {saved_path}")
+        except Exception as e:
+            st.error(f"An error occurred while saving the plot: {str(e)}")
+    else:
+        st.warning("No plot available to save. Please create a plot first.")
+    print(st.session_state.bokeh_plot)

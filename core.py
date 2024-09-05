@@ -421,6 +421,12 @@ class ChunkCollection:
                 
             chunk.id = i
 
+    def __getstate__(self):
+        return {'chunks': self.chunks}
+
+    def __setstate__(self, state):
+        self.chunks = state['chunks']
+
     def process_chunks(self) -> None:
         self.chunks = self.pipeline.process(self.chunks)
         self.__attrs_post_init__()
