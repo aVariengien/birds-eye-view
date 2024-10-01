@@ -17,6 +17,7 @@ import threading
 import json
 import markdown # type: ignore
 import time
+import math
 
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
@@ -206,13 +207,21 @@ class OpenAIEmbeddor(PipelineStep):
         if self.cache_file:
             self.load_cache()
 
-    def compute_embeddings(self, texts: List[str]) -> List[np.array]:
+    def compute_embeddings(self, texts: List[str]) -> List[Any]:
         all_embeddings = []
 
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
             t1 = time.time()
-            response = self.client.embeddings.create(input=batch, model=self.model)
+            try:
+                response = self.client.embeddings.create(input=batch, model=self.model)
+            except:
+                print(len(batch))
+                print( " ==== ")
+                print(batch)
+                print(" ==== ")
+                print(response.json())
+                raise ValueError("bad request!")
             print(f"Time for request: {time.time() - t1}")
             batch_embeddings = [np.array(data.embedding) for data in response.data]
             all_embeddings.extend(batch_embeddings)
@@ -276,6 +285,100 @@ class OpenAIEmbeddor(PipelineStep):
             chunk.embedding = embedding
         return chunks
 
+def dist(chunk1: Chunk, chunk2: Chunk) -> float:
+    assert chunk1.x is not None
+    assert chunk1.y is not None
+    assert chunk2.x is not None
+    assert chunk2.y is not None
+    return math.sqrt((chunk1.x - chunk2.x)**2 +  (chunk1.y - chunk2.y)**2)
+
+def most_frequent(l: List[str]) -> str:
+    counts: dict[str, int] = {} 
+    most_freq = ""
+    highest_count = 0
+    for x in l:
+        if x in counts:
+            counts[x] += 1
+        else:
+            counts[x] = 1
+        if counts[x] > highest_count:
+            highest_count = counts[x]
+            most_freq = x
+    return most_freq
+
+@define
+class HierachicalLabelMapper(PipelineStep):
+    """
+        A pipeline step that take the result of a DotProductLabelor, and makes progressive agregation of the labels through local majority voting.
+    """
+    number_levels: int = field()
+    key_name: str = field()
+
+    def process(self, chunks: List[Chunk]) -> List[Chunk]:
+        for chunk in chunks:
+            assert chunk.x is not None, "You need to reduce the dimension before the Mapper"
+            assert chunk.y is not None
+            assert self.key_name in chunk.attribs, "You need to use a DotProductLabelor before using the Mapper."
+
+        C = 5 # a constant controlling the evolution of the radius for each step. 
+        exponent = 2.5
+
+        # estimating the average distance between two points
+        average_distance = 0.0
+        N = 300
+        for i in range(N):
+            chunk1, chunk2 = rd.sample(chunks, 2)
+            average_distance += dist(chunk1, chunk2)
+        average_distance = average_distance / N
+
+        hierarchical_labels: dict[int, List[str]] = {}
+        for i in range(len(chunks)):
+            hierarchical_labels[i] = []
+
+        step_dividors = [ math.pow(((i/self.number_levels)*C),exponent) + 1 for i in range(self.number_levels)]
+        print(step_dividors)
+
+        for step in range(self.number_levels):
+            #nb_points = int(len(chunks) * step / self.number_levels + 1)
+            # TODO: change the way the radius is computed
+            radius = average_distance / step_dividors[step] if step < self.number_levels -1 else 0
+            # for the last step, radius is zero
+
+            indices = set(list(range(len(chunks))))
+            
+            # while there still indices
+            while len(indices) > 0:
+                # choose a local representative among the remainers
+                rd_point_idx = rd.choice(list(indices)) 
+                center = chunks[rd_point_idx]
+                labels_neighbors = []
+                indices.remove(rd_point_idx)
+                for i, chunk in enumerate(chunks):
+                    if dist(chunk, center) < radius:
+                        labels_neighbors.extend(chunk.attribs[self.key_name+ "_list"].split(","))
+                        if i in indices:
+                            indices.remove(i)
+                            # remove the points in the suronding 
+
+                # compute the most frequent label in the neighborhood, among _all_ the point in the radius
+                
+                if len(labels_neighbors) == 0:
+                    hierarchical_labels[rd_point_idx].append(center.attribs[self.key_name+ "_list"].split(",")[0])
+                else:
+                    hierarchical_labels[rd_point_idx].append(most_frequent(labels_neighbors))
+
+            for k in hierarchical_labels.keys():
+                if len(hierarchical_labels[k]) < step:
+                    hierarchical_labels[k].append(" ")
+        
+        for i, chunk in enumerate(chunks):
+            chunk.attribs[self.key_name] = chunk.attribs[self.key_name + "_list"].replace(",", "")
+            chunk.attribs[self.key_name + "_list"] = ",".join(hierarchical_labels[i])
+            
+            #print(",".join(hierarchical_labels[i]))
+
+        return chunks
+
 
 @define
 class DotProductLabelor(PipelineStep):
@@ -287,6 +390,7 @@ class DotProductLabelor(PipelineStep):
     prefix: str = field(default="")
 
     def __attrs_post_init__(self):
+        assert self.key_name in ["emoji", "keyword"]
         self.embedder = OpenAIEmbeddor(cache_file=self.cache_file, model=self.embedding_model)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
@@ -300,11 +404,14 @@ class DotProductLabelor(PipelineStep):
         # 3. Compute dot products between label embeddings and chunk embeddings
         dot_products = np.dot(np.array(chunk_embeddings), np.array(label_embeddings).T)
 
+        dot_products = dot_products - np.mean(dot_products, axis=0) # center the dot products
+
         # 4. For each chunk, find top 3 labels and add to attribs
         for i, chunk in enumerate(chunks):
             top_indices = np.argsort(dot_products[i])[-self.nb_labels:][::-1]
             top_labels = [self.possible_labels[idx] for idx in top_indices]
-            chunk.attribs[self.key_name] = " ".join(top_labels)
+            chunk.attribs[self.key_name+ "_list"] = ",".join(top_labels)
+            chunk.attribs[self.key_name] = top_labels[0]
 
         return chunks
 
@@ -395,9 +502,15 @@ class Pipeline:
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         for i, step in enumerate(self.steps):
+            
             if self.verbose:
                 print(f"Running step #{i} - {step.__class__}")
+            t1 = time.time()
             chunks = step.process(chunks)
+            t2 = time.time()
+            if self.verbose:
+                print(f"Step #{i} - {step.__class__} completed in {t2-t1}s.")
+
         return chunks
 
 
@@ -410,15 +523,18 @@ class ChunkCollection:
 
     def __attrs_post_init__(self):
         for i, chunk in enumerate(self.chunks):
-            if i < len(self.chunks)-1:
+            if "no_line" in chunk.attribs:
                 chunk.next_chunk_index = i+1
-            else:
-                chunk.next_chunk_index = i
-            if i>0:
-                chunk.previous_chunk_index = i-1
-            else:
                 chunk.previous_chunk_index = i
-                
+            else:
+                if i < len(self.chunks)-1:
+                    chunk.next_chunk_index = i+1
+                else:
+                    chunk.next_chunk_index = i
+                if i>0:
+                    chunk.previous_chunk_index = i-1
+                else:
+                    chunk.previous_chunk_index = i
             chunk.id = i
 
     def __getstate__(self):

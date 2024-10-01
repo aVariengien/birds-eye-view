@@ -31,11 +31,12 @@ import re
 from bs4 import BeautifulSoup # type: ignore
 import html2text
 import markdown # type: ignore
+import json
 
 ## from txt
 
 def load_txt(
-    file_name: str, max_chunk: Optional[int] = 100, chunk_size: int = 800
+    file_name: str, max_chunk: Optional[int] = 100, chunk_size: int = 800, separator: Optional[str] = None
 ) -> List[Chunk]:
     """
     Load a text file and split it into chunks.
@@ -44,6 +45,7 @@ def load_txt(
     file_name (str): Path to the text file.
     max_chunk (Optional[int]): Maximum number of chunks to return. If None, return all chunks.
     chunk_size (int): Size of each chunk in characters.
+    separator (str or None): if not None, the file is split along in chunks separated by the string separator.
 
     Returns:
     List[Chunk]: List of Chunk objects.
@@ -65,6 +67,50 @@ def load_txt(
 
     chunks = [Chunk(og_text=text) for text in texts]
     return chunks
+
+
+
+
+def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
+    """
+    Load chunks from a JSON file.
+
+    Args:
+    file_name (str): Path to the JSON file.
+    max_chunk (Optional[int]): Maximum number of chunks to load. If None, load all chunks.
+
+    Returns:
+    List[Chunk]: A list of Chunk objects.
+    """
+    try:
+        with open(file_name, 'r') as file:
+            data = json.load(file)
+
+        chunks = []
+        for i, item in enumerate(data):
+            if max_chunk is not None and i >= max_chunk:
+                break
+
+            chunk = Chunk(
+                og_text=item['text'],
+                attribs=item['attribs']
+            )
+            chunks.append(chunk)
+
+        return chunks
+
+    except FileNotFoundError:
+        print(f"Error: File '{file_name}' not found.")
+        return []
+    except json.JSONDecodeError:
+        print(f"Error: '{file_name}' is not a valid JSON file.")
+        return []
+    except KeyError as e:
+        print(f"Error: Missing key in JSON structure: {e}")
+        return []
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return []
 
 ## from pdf
 
@@ -242,7 +288,21 @@ def remove_script_tags(html_content):
         tag.decompose()
     return str(soup)
 
-def load_url(
+
+def download_html(url: str):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers)
+    return response.content
+
+def read_file(file_name: str):
+    with open(file_name, "r", encoding="utf-8") as file:
+        text = file.read()
+    return text
+
+def load_html(
+    html_content: str,
     url: str,
     max_chunk: Optional[int] = 100,
     chunk_size: int = 800,
@@ -252,21 +312,18 @@ def load_url(
     Load content from a URL and split it into chunks.
 
     Args:
-    url (str): URL to load content from.
+    html_content: the html content in a string.
     max_chunk (Optional[int]): Maximum number of chunks to return. If None, return all chunks.
     chunk_size (int): Size of each chunk in characters.
 
     Returns:
     List[Chunk]: List of Chunk objects.
     """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
-    }
-    response = requests.get(url, headers=headers)
-    doc = Document(response.content)
+
+    doc = Document(html_content)
 
     title = doc.title()
-    content = markdown.markdown(html2text.html2text(remove_script_tags(response.content)))
+    content = markdown.markdown(html2text.html2text(remove_script_tags(html_content)))
 
     if markdownify:
         content = md(
@@ -353,14 +410,18 @@ def load_file(
             return import_pdf(pdf_path, max_chunk, chunk_size)
         else:
             # Handle as regular URL
-            return load_url(file_name, max_chunk, chunk_size)
+            return load_html(download_html(file_name),file_name, max_chunk, chunk_size)
     else:
         _, file_extension = os.path.splitext(file_name)
 
         if file_extension.lower() == ".pdf":
             return import_pdf(file_name, max_chunk, chunk_size)
+        elif file_extension.lower() == ".json":
+            return import_json(file_name, max_chunk)
         elif file_extension.lower() == ".txt":
             return load_txt(file_name, max_chunk, chunk_size)
+        elif file_extension.lower() == ".html":
+            return load_html(read_file(file_name),file_name, max_chunk, chunk_size)
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")
 
