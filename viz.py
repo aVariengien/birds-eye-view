@@ -291,7 +291,7 @@ if st.sidebar.button("Refresh") or st.session_state.chunk_collection is not None
         n_connections,
     )
     st.session_state.bokeh_plot = plot
-    html(file_html(plot, CDN, "My Plot"), height=1000)
+    html(file_html(plot, CDN, "My Plot"), height=550)
     # print(" +++++ ")
     # print(file_html(plot, CDN, "My Plot"))
     #st.bokeh_chart(plot, use_container_width=False)

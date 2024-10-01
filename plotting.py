@@ -9,7 +9,7 @@ from core import (
     EmbeddingSearch,
 )
 from file_loading import wrap_str
-import colorcet as cc
+import colorcet as cc # type: ignore
 from bokeh.plotting import figure  # type: ignore
 from bokeh.models import ColumnDataSource, HoverTool, Button, TapTool, CustomJS, Div  # type: ignore
 from bokeh.layouts import column, row  # type: ignore
@@ -221,7 +221,18 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
 
 
     # Create figure
-    p = figure(height = 600, width = 900, tools="pan,wheel_zoom,box_zoom,reset", active_scroll="wheel_zoom")
+    p = figure(height = 700, 
+               width = 900, 
+               tools="pan,wheel_zoom,box_zoom,reset,save", 
+               active_scroll="wheel_zoom", 
+               height_policy="min",
+               width_policy="fit",
+               max_height = 1000,
+               min_height = 400,
+               max_width = 1200,
+               min_width = 600,
+               sizing_mode="stretch_both",
+               )
 # Create glyphs and color bars for each field
     field_glyphs = {}
     color_bars = {}
@@ -286,7 +297,7 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
                 major_label_text_font_size='8pt',
                 border_line_color=None,
                 location=(0, 0),
-                title=wrap_str(field, max_line_len=70, skip_line_char="\n"),
+                title=wrap_str(field, max_line_len=80, skip_line_char="\n"),
                 visible=False
             )
             p.add_layout(color_bar, 'right')
@@ -309,14 +320,21 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
     p.add_tools(TapTool())
     
     # Create text div
-    text_div = Div(width=300, height=500, text="")
+    text_div = Div(width=300, height=500, text="",                
+                height_policy="fit",
+               width_policy="fit",
+               max_height = 800,
+               min_height = 400,
+               max_width = 300,
+               min_width = 150,
+               sizing_mode="stretch_both",)
 
     # Create connection lines
     prev_lines = [p.line(x=[], y=[], line_color="#ffceb8", line_width=2, visible=False) for _ in range(n_connections)]
     next_lines = [p.line(x=[], y=[], line_color="#f75002", line_width=2, visible=False) for _ in range(n_connections)]
 
     # Create field selector
-    field_selector = Select(title="Color by:", value=fields_to_include[0], options=remove_elements(fields_to_include,["emoji_list", "label_list"]), width=300, width_policy="fixed")
+    field_selector = Select(title="Show:", value=fields_to_include[0], options=remove_elements(fields_to_include,["emoji_list", "label_list"]), width=300, width_policy="fixed")
 
     # Create JavaScript callback for updating visible glyph and color bar
     update_visible_elements = CustomJS(args=dict(source=source, field_glyphs=field_glyphs, color_bars=color_bars, additional_glyph=additional_glyph), code="""
@@ -392,9 +410,9 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
     tap_tool.callback = callback
 
     # Create layout
-    buttons = row(button_left, button_right)
-    side = column(field_selector, text_div, buttons)
-    layout = row(side, p)
+    buttons = row(button_left, button_right, sizing_mode="fixed")
+    side = column(field_selector, text_div, buttons, sizing_mode="fixed")
+    layout = row(side, p, sizing_mode="stretch_both")
     #p.aspect_ratio = 1
 
     return layout
