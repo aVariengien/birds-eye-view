@@ -213,10 +213,11 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
     # Create data source
     source = create_data_source(x, y, texts, hover_texts, field_values, prev_chunks, next_chunks, existing_fields)
 
-    for i,field in enumerate(fields_to_include):
-        wrapped_field = wrap_str(field, max_line_len=70, skip_line_char="<br>")
-        source.data[wrapped_field] = source.data[field][::]
-        fields_to_include[i] = wrapped_field
+    # for i,field in enumerate(fields_to_include):
+    #     if len(field) > 70:
+    #         wrapped_field = wrap_str(field, max_line_len=70, skip_line_char="\n")
+    #         source.data[wrapped_field] = source.data[field][::]
+    #         fields_to_include[i] = wrapped_field
 
 
     # Create figure
@@ -285,7 +286,7 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
                 major_label_text_font_size='8pt',
                 border_line_color=None,
                 location=(0, 0),
-                title=field,
+                title=wrap_str(field, max_line_len=70, skip_line_char="\n"),
                 visible=False
             )
             p.add_layout(color_bar, 'right')
@@ -315,7 +316,7 @@ def visualize_chunks(chunk_collection, fields_to_include, n_connections=5):
     next_lines = [p.line(x=[], y=[], line_color="#f75002", line_width=2, visible=False) for _ in range(n_connections)]
 
     # Create field selector
-    field_selector = Select(title="Color by:", value=fields_to_include[0], options=remove_elements(fields_to_include,["emoji_list", "label_list"]))
+    field_selector = Select(title="Color by:", value=fields_to_include[0], options=remove_elements(fields_to_include,["emoji_list", "label_list"]), width=300, width_policy="fixed")
 
     # Create JavaScript callback for updating visible glyph and color bar
     update_visible_elements = CustomJS(args=dict(source=source, field_glyphs=field_glyphs, color_bars=color_bars, additional_glyph=additional_glyph), code="""
