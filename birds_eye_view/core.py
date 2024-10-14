@@ -200,7 +200,7 @@ class OpenAIEmbeddor(PipelineStep):
     cache_dir: Optional[str] = field(default=None)
     model: str = field(default="text-embedding-3-small")
     api_key: Optional[str] = field(default=None)
-    client: OpenAI = field(factory=lambda: OpenAI())
+    client: OpenAI = field(factory=lambda: OpenAI(api_key="dummy"))
     batch_size: int = field(default=4000)
 
     # New attributes for HDF5 and index
