@@ -199,6 +199,7 @@ class OpenAITextProcessor(PipelineStep):
 class OpenAIEmbeddor(PipelineStep):
     cache_dir: Optional[str] = field(default=None)
     model: str = field(default="text-embedding-3-small")
+    api_key: Optional[str] = field(default=None)
     client: OpenAI = field(factory=lambda: OpenAI())
     batch_size: int = field(default=4000)
 
@@ -209,6 +210,8 @@ class OpenAIEmbeddor(PipelineStep):
     def __attrs_post_init__(self):
         if self.cache_dir:
             os.makedirs(self.cache_dir, exist_ok=True)
+        if self.api_key is not None and len(self.api_key) > 0:
+            self.client.api_key = self.api_key
 
     def load_cache(self):
         t1 = time.time()
@@ -244,7 +247,7 @@ class OpenAIEmbeddor(PipelineStep):
                 response = self.client.embeddings.create(input=batch, model=self.model)
             except Exception as e:
                 print(f"Error in API request: {e}")
-                raise ValueError("Bad request!")
+                raise ValueError(f"Error in embedding API request: {e}")
             print(f"Time for request: {time.time() - t1}")
             batch_embeddings = [np.array(data.embedding) for data in response.data]
             all_embeddings.extend(batch_embeddings)
@@ -445,6 +448,7 @@ class DotProductLabelor(PipelineStep):
     nb_labels: int = field()
     embedding_model: str = field()
     key_name: str = field()
+    api_key: Optional[str] = field(default=None)
     possible_labels: Optional[List[str]] = field(default=None)
     cache_dir: Optional[str] = field(default=None)
     no_cache: bool = field(default=False)
@@ -459,7 +463,7 @@ class DotProductLabelor(PipelineStep):
         if self.possible_labels is None and self.key_name == "emoji":
             self.possible_labels = ALL_EMOJIS
         
-        self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model)
+        self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model, api_key=self.api_key)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         assert self.possible_labels is not None, "No possible_labels set."

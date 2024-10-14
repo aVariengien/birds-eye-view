@@ -2,3 +2,4 @@ cache/
 data/
 plots/
 saved_collections/
+.streamlit/

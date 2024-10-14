@@ -99,7 +99,10 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code):
             document_names.split("\n"), max_chunk=None, chunk_size=chunk_size
         )
         chunks = st.session_state.chunks[:max_chunk]
+    
+    global_vars = {'api_key': api_key}
     pipeline = eval(pipeline_code)
+    print("key", pipeline.steps[0].api_key)
     print("Loaded files!")
     return ChunkCollection(chunks=chunks, pipeline=pipeline)
 
@@ -123,6 +126,10 @@ st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="
 st.sidebar.title("🦉 Bird's eye view")
 st.sidebar.markdown("*Take a look at your documents from above.*")
 
+if "OpenAI_key" not in st.secrets:
+    api_key = st.sidebar.text_input("Enter your OpenAI API key:")
+else:
+    api_key = st.secrets["OpenAI_key"]
 # File/Cache input
 file_paths = st.sidebar.text_area(
     "Enter file paths (e.g. data/paper.pdf) or URLs (one per line)",
@@ -149,11 +156,10 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
 
     pipeline_code = st.text_area(
         "Pipeline Code",
-        """Pipeline([
-        OpenAIEmbeddor(
+        """Pipeline([OpenAIEmbeddor(
             model=embedding_model, 
-            cache_dir=cache_dir,
             batch_size=2000,
+            api_key=api_key
             ),
         DotProductLabelor(
             possible_labels=ALL_EMOJIS,
@@ -161,6 +167,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
             embedding_model=embedding_model,
             key_name="emoji",
             prefix="",
+            api_key=api_key
         ),
         UMAPReductor(
             verbose=True,
@@ -220,16 +227,18 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
 @st.cache_data
 def save(_collection, name):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    print("Hello")
     return _collection.save(return_data=True)
 
 with st.sidebar.expander("Save and load", expanded=False, icon="💾"):
     st.header("Manage Chunk Collection")
 
-    st.download_button(
-        label="💾 Download collection",
-        data=save(st.session_state.chunk_collection, "hello"),
-        file_name="chunk_collection.json",
-    )
+    if st.session_state.chunk_collection is not None:
+        st.download_button(
+            label="💾 Download collection",
+            data=save(st.session_state.chunk_collection, "hello"),
+            file_name="chunk_collection.json",
+        )
     
     uploaded_file = st.file_uploader("⬆️ Load Collection")
     if uploaded_file is not None:
@@ -237,11 +246,12 @@ with st.sidebar.expander("Save and load", expanded=False, icon="💾"):
         st.session_state.chunk_collection = ChunkCollection.load_from_file(uploaded_file)
 
     # Text input for plot name
-    st.download_button(
-        label="📊 Download Interactive Plot",
-        data=st.session_state.bokeh_plot,
-        file_name=f"birds_eye_view_plot.html",
-    )
+    if st.session_state.bokeh_plot is not None:
+        st.download_button(
+            label="📊 Download Interactive Plot",
+            data=st.session_state.bokeh_plot,
+            file_name=f"birds_eye_view_plot.html",
+        )
 
 
 
