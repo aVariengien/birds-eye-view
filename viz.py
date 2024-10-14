@@ -85,7 +85,6 @@ def update_search():
     )
     st.session_state.chunk_collection.apply_step(embedding_search)
     st.session_state.vis_field = "Search:" + search_prompt
-    st.success("EmbeddingSearch completed!")
     st.session_state.run_search = True
 
 
