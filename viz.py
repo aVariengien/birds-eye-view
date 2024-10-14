@@ -131,7 +131,7 @@ else:
 # File/Cache input
 file_paths = st.sidebar.text_area(
     "Enter file paths (e.g. data/paper.pdf) or URLs (one per line)",
-    """https://thezvi.substack.com/p/ai-79-ready-for-some-football""",
+    """https://www.gutenberg.org/cache/epub/944/pg944-images.html""",
 )
 
 run_pipeline = st.sidebar.button("⏩️ Run Pipeline")
