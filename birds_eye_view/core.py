@@ -12,12 +12,13 @@ import umap  # type: ignore
 import plotly.graph_objects as go  # type: ignore
 import plotly.express as px  # type: ignore
 import concurrent.futures
-from prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT
+from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
 import threading
 import json
 import markdown # type: ignore
 import time
 import math
+from sklearn.neighbors import RadiusNeighborsTransformer #type: ignore
 
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
@@ -68,7 +69,7 @@ class Chunk:
     og_text: str = field()  # the original text the atom has been created with
     x: Optional[float] = field(default=None)
     y: Optional[float] = field(default=None)
-    embedding: Optional[np.array] = field(default=None, eq=False)
+    embedding: Optional[np.ndarray] = field(default=None, eq=False)
     text: str = field(
         default=""
     )  # the text after / during the pre-embedding processing
@@ -195,7 +196,6 @@ class OpenAITextProcessor(PipelineStep):
 @define
 class OpenAIEmbeddor(PipelineStep):
     """An embeddor based on OpenAI embedding API with caching functionality."""
-
     cache_file: Optional[str] = field(default=None)
     cache: Dict[str, Dict[str, List[float]]] = field(factory=dict)
     model: str = field(default="text-embedding-3-small")
@@ -248,7 +248,7 @@ class OpenAIEmbeddor(PipelineStep):
                 with open(self.cache_file, "w") as f:
                     json.dump(self.cache, f)
 
-    def get_embeddings(self, texts: List[str]) -> List[np.array]:
+    def get_embeddings(self, texts: List[str]) -> List[np.ndarray]:
         all_embeddings = []
         texts_to_embed = []
         indices_to_embed = []
@@ -266,7 +266,7 @@ class OpenAIEmbeddor(PipelineStep):
             for text, embedding in zip(texts_to_embed, new_embeddings):
                 if self.model not in self.cache:
                     self.cache[self.model] = {}
-                self.cache[self.model][text] = embedding.tolist()  # type: ignore
+                self.cache[self.model][text] = embedding.tolist()  # type: ignore # TODO remove the .tolist() once we have a more mature cache file system
 
             for i, embedding in zip(indices_to_embed, new_embeddings):
                 all_embeddings.insert(i, embedding)
@@ -311,69 +311,108 @@ class HierachicalLabelMapper(PipelineStep):
     """
         A pipeline step that take the result of a DotProductLabelor, and makes progressive agregation of the labels through local majority voting.
     """
-    number_levels: int = field()
+    max_number_levels: int = field()
     key_name: str = field()
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
+        assert self.max_number_levels > 3
         for chunk in chunks:
             assert chunk.x is not None, "You need to reduce the dimension before the Mapper"
             assert chunk.y is not None
             assert self.key_name in chunk.attribs, "You need to use a DotProductLabelor before using the Mapper."
 
-        C = 5 # a constant controlling the evolution of the radius for each step. 
-        exponent = 2.5
+        C = 9 # a constant controlling the evolution of the radius for each step. 
+        exponent = 3
 
         # estimating the average distance between two points
-        average_distance = 0.0
-        N = 300
+        distances = []
+        N = 1000
         for i in range(N):
             chunk1, chunk2 = rd.sample(chunks, 2)
-            average_distance += dist(chunk1, chunk2)
-        average_distance = average_distance / N
+            distances.append(dist(chunk1, chunk2))
+        map_diameter = np.percentile(distances, 90)
+        print("Map diameter:", map_diameter)
 
         hierarchical_labels: dict[int, List[str]] = {}
         for i in range(len(chunks)):
             hierarchical_labels[i] = []
 
-        step_dividors = [ math.pow(((i/self.number_levels)*C),exponent) + 1 for i in range(self.number_levels)]
-        print(step_dividors)
+        #step_dividors = [ math.pow(((i/self.max_number_levels)*C),exponent) + 6 for i in range(self.max_number_levels)]
+        max_zoom = 0.6
+        label_per_length = 5 # density of the label shown on the screen
 
-        for step in range(self.number_levels):
-            #nb_points = int(len(chunks) * step / self.number_levels + 1)
-            # TODO: change the way the radius is computed
-            radius = average_distance / step_dividors[step] if step < self.number_levels -1 else 0
-            # for the last step, radius is zero
+        min_distance = 0.0 # a tail to ensure the small details are rendered
+        tail_length = 1
+        radiuses = [(i*max_zoom/self.max_number_levels) *  map_diameter / (2*label_per_length) for i in range(1, self.max_number_levels-tail_length)][::-1]
+        last_radius = radiuses[-1]
+        for j in range(tail_length, 0, -1):
+            radiuses.append((last_radius-min_distance)*(j/(tail_length+1)) + min_distance)
+        radiuses.append(0.0)
+        
+        print(radiuses)
+
+        points = np.array([[chunk.x, chunk.y] for chunk in chunks])
+
+        last_turn = False
+        step = 0
+        while step < self.max_number_levels and not last_turn:
+            radius = radiuses[step] if step < self.max_number_levels -1 else 0 # for the last step, radius is zero
+            print("radius", radius)
+            if last_turn:
+                radius = 0
+
+            graph = RadiusNeighborsTransformer(radius=radius).fit_transform(points)
 
             indices = set(list(range(len(chunks))))
             
             # while there still indices
+            nb_turns = 0
             while len(indices) > 0:
+                nb_turns += 1
                 # choose a local representative among the remainers
                 rd_point_idx = rd.choice(list(indices)) 
                 center = chunks[rd_point_idx]
                 labels_neighbors = []
                 indices.remove(rd_point_idx)
-                for i, chunk in enumerate(chunks):
-                    if dist(chunk, center) < radius:
-                        labels_neighbors.extend(chunk.attribs[self.key_name+ "_list"].split(","))
-                        if i in indices:
-                            indices.remove(i)
-                            # remove the points in the suronding 
+
+                _, non_zero_idx = graph[rd_point_idx].nonzero()
+
+                for i in non_zero_idx:
+                    labels_neighbors.extend(chunks[i].attribs[self.key_name+ "_label_list"].split(","))
+                    if i in indices:
+                        indices.remove(i)
+                        # remove the points in the neighborhood 
 
                 # compute the most frequent label in the neighborhood, among _all_ the point in the radius
                 
                 if len(labels_neighbors) == 0:
-                    hierarchical_labels[rd_point_idx].append(center.attribs[self.key_name+ "_list"].split(",")[0])
+                    hierarchical_labels[rd_point_idx].append(center.attribs[self.key_name+ "_label_list"].split(",")[0])
                 else:
                     hierarchical_labels[rd_point_idx].append(most_frequent(labels_neighbors))
 
             for k in hierarchical_labels.keys():
-                if len(hierarchical_labels[k]) < step:
+                if len(hierarchical_labels[k]) <= step:
                     hierarchical_labels[k].append(" ")
+
+            # if we do almost as much turns as the number of chunks, the radius is too small. We should stop, we are at the minimal resolution
+            # if nb_turns > 0.8*len(chunks): # TODO uncomment
+            #     last_turn = True
+            step +=1
         
         for i, chunk in enumerate(chunks):
-            chunk.attribs[self.key_name] = chunk.attribs[self.key_name + "_list"].replace(",", "")
-            chunk.attribs[self.key_name + "_list"] = ",".join(hierarchical_labels[i])
+            chunk.attribs[self.key_name] = chunk.attribs[self.key_name + "_label_list"].replace(",", "")
+            display_list = []
+            for label in hierarchical_labels[i][:(-tail_length-1)]:
+                for k in range(tail_length+1):
+                    display_list.append(label)
+            if i == 0:
+                print(len(hierarchical_labels[i][:(-tail_length-1)]))
+            for label in hierarchical_labels[i][-tail_length-1:]:
+                display_list.append(label)
+            if i == 0:
+                print(len(display_list))
+
+            chunk.attribs[self.key_name + "_list"] = ",".join(display_list)
             
             #print(",".join(hierarchical_labels[i]))
 
@@ -382,24 +421,34 @@ class HierachicalLabelMapper(PipelineStep):
 
 @define
 class DotProductLabelor(PipelineStep):
-    possible_labels: List[str] = field()
     nb_labels: int = field()
-    cache_file: str = field()
     embedding_model: str = field()
     key_name: str = field()
+    possible_labels: Optional[List[str]] = field(default=None)
+    cache_file: Optional[str] = field(default=None)
     prefix: str = field(default="")
 
     def __attrs_post_init__(self):
         assert self.key_name in ["emoji", "keyword"]
+        if self.cache_file is None:
+            self.cache_file = "cache/"+self.key_name+".json" #TODO change when we change the cache file system
+            # by default the name of the cache is the keyname.
+        
+        if self.possible_labels is None and self.key_name == "emoji":
+            self.possible_labels = ALL_EMOJIS
+        
         self.embedder = OpenAIEmbeddor(cache_file=self.cache_file, model=self.embedding_model)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
+        assert self.possible_labels is not None, "No possible_labels set."
+        assert len(chunks) > 0
+        assert chunks[0].embedding is not None, "Chunk embeddings needs to be computed ahead."
         # 1. Embed the label strings
         label_texts = [f"{self.prefix}{label}" for label in self.possible_labels]
         label_embeddings = self.embedder.get_embeddings(label_texts)
 
         # 2. Embed all chunk texts
-        chunk_embeddings = self.embedder.get_embeddings([chunk.text for chunk in chunks])
+        chunk_embeddings = [chunk.embedding for chunk in chunks]
 
         # 3. Compute dot products between label embeddings and chunk embeddings
         dot_products = np.dot(np.array(chunk_embeddings), np.array(label_embeddings).T)
@@ -410,7 +459,7 @@ class DotProductLabelor(PipelineStep):
         for i, chunk in enumerate(chunks):
             top_indices = np.argsort(dot_products[i])[-self.nb_labels:][::-1]
             top_labels = [self.possible_labels[idx] for idx in top_indices]
-            chunk.attribs[self.key_name+ "_list"] = ",".join(top_labels)
+            chunk.attribs[self.key_name+ "_label_list"] = ",".join(top_labels)
             chunk.attribs[self.key_name] = top_labels[0]
 
         return chunks
@@ -605,3 +654,5 @@ class ChunkCollection:
 # plt.show()
 
 # # %%
+
+# %%

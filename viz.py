@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go  # type: ignore
 import plotly.express as px  # type: ignore
-from core import (
+from birds_eye_view.core import (
     ChunkCollection,
     Pipeline,
     OpenAITextProcessor,
@@ -12,10 +12,10 @@ from core import (
     HierachicalLabelMapper,
     EmbeddingSearch,
 )
-from plotting import visualize_chunks
-from file_loading import load_files, wrap_str
+from birds_eye_view.plotting import visualize_chunks
+from birds_eye_view.file_loading import load_files, wrap_str
 import numpy as np
-from prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
+from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
 from typing import Optional
 
 from streamlit.components.v1 import html # type: ignore
@@ -280,6 +280,7 @@ if run_pipeline:
 if run_search and st.session_state.chunk_collection is not None:
     update_search()
 
+highlight_first_document = st.sidebar.checkbox("Check to only show the first document, but use the other docs in creating the embeddings.")
 
 if st.sidebar.button("Refresh") or st.session_state.chunk_collection is not None:  # and refresh:
     # Visualize chunks
@@ -289,6 +290,8 @@ if st.sidebar.button("Refresh") or st.session_state.chunk_collection is not None
         st.session_state.viz_options, # st.session_state.vis_field viz_options
         #use_qualitative_colors if not run_search else False,
         n_connections,
+        highlight_first_document=highlight_first_document,
+        document_to_show = file_paths.split("\n")[0],
     )
     st.session_state.bokeh_plot = plot
     html(file_html(plot, CDN, "My Plot"), height=550)

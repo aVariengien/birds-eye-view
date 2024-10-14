@@ -1,8 +1,8 @@
 # %%
 from langchain_community.document_loaders import MathpixPDFLoader  # type: ignore
-from core import wrap_str
+from birds_eye_view.core import wrap_str
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from core import (
+from birds_eye_view.core import (
     Chunk,
     ChunkCollection,
     OpenAIEmbeddor,
@@ -28,15 +28,19 @@ from urllib.parse import urlparse
 from markdownify import markdownify as md  # type: ignore
 from typing import List
 import re
-from bs4 import BeautifulSoup # type: ignore
+from bs4 import BeautifulSoup  # type: ignore
 import html2text
-import markdown # type: ignore
+import markdown  # type: ignore
 import json
 
 ## from txt
 
+
 def load_txt(
-    file_name: str, max_chunk: Optional[int] = 100, chunk_size: int = 800, separator: Optional[str] = None
+    file_name: str,
+    max_chunk: Optional[int] = 100,
+    chunk_size: int = 800,
+    separator: Optional[str] = None,
 ) -> List[Chunk]:
     """
     Load a text file and split it into chunks.
@@ -69,8 +73,6 @@ def load_txt(
     return chunks
 
 
-
-
 def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
     """
     Load chunks from a JSON file.
@@ -83,7 +85,7 @@ def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
     List[Chunk]: A list of Chunk objects.
     """
     try:
-        with open(file_name, 'r') as file:
+        with open(file_name, "r") as file:
             data = json.load(file)
 
         chunks = []
@@ -91,10 +93,7 @@ def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
             if max_chunk is not None and i >= max_chunk:
                 break
 
-            chunk = Chunk(
-                og_text=item['text'],
-                attribs=item['attribs']
-            )
+            chunk = Chunk(og_text=item["text"], attribs=item["attribs"])
             chunks.append(chunk)
 
         return chunks
@@ -112,7 +111,9 @@ def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
         print(f"An unexpected error occurred: {e}")
         return []
 
+
 ## from pdf
+
 
 def find_page_number(idx: int, indices: List[int]) -> int:
     """idx is an int. indices is the list of the indices where the page starts.
@@ -222,7 +223,9 @@ def download_pdf(url: str, cache_folder: str = "cache/pdf") -> str:
     print(f"PDF downloaded and saved to: {file_path}")
     return file_path
 
+
 ## from url
+
 
 def get_heading_list(content: str, idx: int, markdown: bool = False) -> List[str]:
     """Given a document content (markdown or html), return the list of heading that covers the text at the string position idx"""
@@ -231,10 +234,11 @@ def get_heading_list(content: str, idx: int, markdown: bool = False) -> List[str
     else:
         return get_html_headings(content, idx)
 
+
 def get_markdown_headings(content: str, idx: int) -> List[str]:
-    headings = [] #type: List[str]
+    headings = []  # type: List[str]
     current_level = 0
-    lines = content.split('\n')
+    lines = content.split("\n")
     current_position = 0
 
     for line in lines:
@@ -242,7 +246,7 @@ def get_markdown_headings(content: str, idx: int) -> List[str]:
         if current_position + line_length > idx:
             break
 
-        heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+        heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading_match:
             level = len(heading_match.group(1))
             heading_text = heading_match.group(2).strip()
@@ -259,22 +263,23 @@ def get_markdown_headings(content: str, idx: int) -> List[str]:
 
     return headings
 
+
 def get_html_headings(content: str, idx: int) -> List[str]:
-    headings = [] #type: List[str]
+    headings = []  # type: List[str]
     current_position = 0
-    heading_pattern = re.compile(r'<h([1-6]).*?>(.*?)</h\1>', re.DOTALL)
-    
+    heading_pattern = re.compile(r"<h([1-6]).*?>(.*?)</h\1>", re.DOTALL)
+
     for match in heading_pattern.finditer(content):
         start, end = match.span()
         if start > idx:
             break
-        
+
         level = int(match.group(1))
-        heading_text = re.sub(r'<.*?>', '', match.group(2)).strip()
-        
+        heading_text = re.sub(r"<.*?>", "", match.group(2)).strip()
+
         while len(headings) >= level:
             headings.pop()
-        
+
         headings.append(heading_text)
         current_position = end
     return headings
@@ -282,8 +287,8 @@ def get_html_headings(content: str, idx: int) -> List[str]:
 
 def remove_script_tags(html_content):
     """Return the document without script tag."""
-    soup = BeautifulSoup(html_content, 'html.parser')
-    script_tags = soup.find_all('script')
+    soup = BeautifulSoup(html_content, "html.parser")
+    script_tags = soup.find_all("script")
     for tag in script_tags:
         tag.decompose()
     return str(soup)
@@ -296,10 +301,12 @@ def download_html(url: str):
     response = requests.get(url, headers=headers)
     return response.content
 
+
 def read_file(file_name: str):
     with open(file_name, "r", encoding="utf-8") as file:
         text = file.read()
     return text
+
 
 def load_html(
     html_content: str,
@@ -324,7 +331,7 @@ def load_html(
 
     title = doc.title()
     content = markdown.markdown(html2text.html2text(remove_script_tags(html_content)))
-
+    content = content.replace("\n", " ") #remove some unecessary line breaks
     if markdownify:
         content = md(
             content,
@@ -380,7 +387,9 @@ def load_html(
                     "url": url,
                     "index": i,
                     "doc_position": i / len(texts),
-                    "headings": get_heading_list(content, idx, markdown = markdownify)[::]
+                    "headings": get_heading_list(content, idx, markdown=markdownify)[
+                        ::
+                    ],
                 },
             )
         )
@@ -410,7 +419,7 @@ def load_file(
             return import_pdf(pdf_path, max_chunk, chunk_size)
         else:
             # Handle as regular URL
-            return load_html(download_html(file_name),file_name, max_chunk, chunk_size)
+            return load_html(download_html(file_name), file_name, max_chunk, chunk_size)
     else:
         _, file_extension = os.path.splitext(file_name)
 
@@ -421,7 +430,7 @@ def load_file(
         elif file_extension.lower() == ".txt":
             return load_txt(file_name, max_chunk, chunk_size)
         elif file_extension.lower() == ".html":
-            return load_html(read_file(file_name),file_name, max_chunk, chunk_size)
+            return load_html(read_file(file_name), file_name, max_chunk, chunk_size)
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")
 
