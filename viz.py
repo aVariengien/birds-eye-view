@@ -100,9 +100,8 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code):
         )
         chunks = st.session_state.chunks[:max_chunk]
     
-    global_vars = {'api_key': api_key}
     pipeline = eval(pipeline_code)
-    print("key", pipeline.steps[0].api_key)
+    os.write(1, f"{pipeline.steps[0].api_key}\n".encode())
     print("Loaded files!")
     return ChunkCollection(chunks=chunks, pipeline=pipeline)
 
