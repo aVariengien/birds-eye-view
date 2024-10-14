@@ -7,6 +7,7 @@ from birds_eye_view.core import (
     Pipeline,
     OpenAITextProcessor,
     OpenAIEmbeddor,
+    OpenAIEmbeddorHdf5Cache,
     UMAPReductor,
     Chunk,
     DotProductLabelor,
@@ -23,13 +24,13 @@ chunks = birds_eye_view.file_loading.load_files(file_paths=[url], max_chunk=100)
 
 
 # %%
-cache_file = "beagle.json"
+cache_file = "cache/first_hdf5"
 embedding_model = "text-embedding-3-large"
 
 pipeline = Pipeline([
-    OpenAIEmbeddor(
+    OpenAIEmbeddorHdf5Cache(
         model=embedding_model, 
-        cache_file=cache_file,
+        cache_dir=cache_file,
         batch_size=2000,
         ),
     DotProductLabelor(
@@ -57,10 +58,14 @@ collection = ChunkCollection(pipeline=pipeline, chunks=chunks)
 collection.process_chunks()
 
 # %%
-
+url = "https://www.gutenberg.org/cache/epub/944/pg944-images.html"
 all_chunk = birds_eye_view.file_loading.load_files(file_paths=[url], max_chunk=None)
 big_collection = ChunkCollection(pipeline=pipeline, chunks=all_chunk)
 big_collection.process_chunks()
+visualize_chunks(big_collection, fields_to_include=list(big_collection.chunks[0].attribs.keys()))
+
+from birds_eye_view.core import EmbeddingSearch
+
 
 # %%
 

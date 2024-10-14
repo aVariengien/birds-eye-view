@@ -19,7 +19,10 @@ import markdown # type: ignore
 import time
 import math
 from sklearn.neighbors import RadiusNeighborsTransformer #type: ignore
-
+import h5py
+from h5py import File
+import os
+import base64
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
     """Add skip line every max_line_len characters. Ensure that no word is cut in the middle."""
@@ -192,20 +195,44 @@ class OpenAITextProcessor(PipelineStep):
         self.save_cache()
         return chunks
 
-
 @define
 class OpenAIEmbeddor(PipelineStep):
-    """An embeddor based on OpenAI embedding API with caching functionality."""
-    cache_file: Optional[str] = field(default=None)
-    cache: Dict[str, Dict[str, List[float]]] = field(factory=dict)
+    cache_dir: Optional[str] = field(default=None)
     model: str = field(default="text-embedding-3-small")
     client: OpenAI = field(factory=lambda: OpenAI())
-    batch_size: int = field(default=4000)  # Process in batches to avoid API limits
-    cache_lock: threading.Lock = field(factory=threading.Lock)
+    batch_size: int = field(default=4000)
+
+    # New attributes for HDF5 and index
+    hdf5_file: Optional[File] = field(default=None)
+    index: Dict[str, Dict[str, int]] = field(factory=dict)
 
     def __attrs_post_init__(self):
-        if self.cache_file:
-            self.load_cache()
+        if self.cache_dir:
+            os.makedirs(self.cache_dir, exist_ok=True)
+
+    def load_cache(self):
+        t1 = time.time()
+        if self.cache_dir:
+            hdf5_path = os.path.join(self.cache_dir, f"{self.model}_embeddings.h5")
+            index_path = os.path.join(self.cache_dir, f"{self.model}_index.json")
+
+            # Load or create HDF5 file
+            self.hdf5_file = h5py.File(hdf5_path, 'a')
+
+            # Load or create index
+            if os.path.exists(index_path):
+                with open(index_path, 'r') as f:
+                    self.index = json.load(f)
+            else:
+                self.index = {}
+
+        print(f"Time to load: {time.time() - t1}")
+
+    def save_index(self):
+        if self.cache_dir:
+            index_path = os.path.join(self.cache_dir, f"{self.model}_index.json")
+            with open(index_path, 'w') as f:
+                json.dump(self.index, f)
 
     def compute_embeddings(self, texts: List[str]) -> List[Any]:
         all_embeddings = []
@@ -215,63 +242,53 @@ class OpenAIEmbeddor(PipelineStep):
             t1 = time.time()
             try:
                 response = self.client.embeddings.create(input=batch, model=self.model)
-            except:
-                print(len(batch))
-                print( " ==== ")
-                print(batch)
-                print(" ==== ")
-                print(response.json())
-                raise ValueError("bad request!")
+            except Exception as e:
+                print(f"Error in API request: {e}")
+                raise ValueError("Bad request!")
             print(f"Time for request: {time.time() - t1}")
             batch_embeddings = [np.array(data.embedding) for data in response.data]
             all_embeddings.extend(batch_embeddings)
         return all_embeddings
 
-    def load_cache(self):
-        t1 = time.time()
-        try:
-            with open(self.cache_file, "r") as f:
-                self.cache = json.load(f)
-        except FileNotFoundError:
-            print(
-                f"Cache file {self.cache_file} not found. Starting with an empty cache."
-            )
-        except json.JSONDecodeError:
-            print(
-                f"Error decoding cache file {self.cache_file}. Starting with an empty cache."
-            )
-        print(f"Time to load: {time.time() - t1}, {self.cache_file}")
-
-    def save_cache(self):
-        if self.cache_file:
-            with self.cache_lock:
-                with open(self.cache_file, "w") as f:
-                    json.dump(self.cache, f)
-
     def get_embeddings(self, texts: List[str]) -> List[np.ndarray]:
+        self.load_cache()
         all_embeddings = []
         texts_to_embed = []
         indices_to_embed = []
 
         for i, text in enumerate(texts):
-            if self.model in self.cache and text in self.cache[self.model]:
-                all_embeddings.append(np.array(self.cache[self.model][text]))
+            if self.cache_dir and text in self.index.get(self.model, {}):
+                assert type(self.hdf5_file) == File
+                embedding_index = self.index[self.model][text]
+                embedding = self.hdf5_file[f"{self.model}/{embedding_index}"][:]
+                all_embeddings.append(embedding)
             else:
                 texts_to_embed.append(text)
                 indices_to_embed.append(i)
 
         if texts_to_embed:
-            print(f"Caching {len(texts_to_embed)} ...")
+            print(f"Computing {len(texts_to_embed)} embeddings...")
             new_embeddings = self.compute_embeddings(texts_to_embed)
-            for text, embedding in zip(texts_to_embed, new_embeddings):
-                if self.model not in self.cache:
-                    self.cache[self.model] = {}
-                self.cache[self.model][text] = embedding.tolist()  # type: ignore # TODO remove the .tolist() once we have a more mature cache file system
-
             for i, embedding in zip(indices_to_embed, new_embeddings):
                 all_embeddings.insert(i, embedding)
 
-            self.save_cache()
+            if self.cache_dir:
+                assert type(self.hdf5_file) == File
+                if self.model not in self.hdf5_file:
+                    self.hdf5_file.create_group(self.model)
+
+                if self.model not in self.index:
+                    self.index[self.model] = {}
+
+                current_index = len(self.index[self.model])
+
+                for text, embedding in zip(texts_to_embed, new_embeddings):
+                    self.hdf5_file[f"{self.model}/{current_index}"] = embedding
+                    self.index[self.model][text] = current_index
+                    current_index += 1
+
+                self.hdf5_file.flush()
+                self.save_index()
         else:
             print("No caching needed!")
 
@@ -284,6 +301,10 @@ class OpenAIEmbeddor(PipelineStep):
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
         return chunks
+
+    def __del__(self):
+        if self.hdf5_file:
+            self.hdf5_file.close()
 
 def dist(chunk1: Chunk, chunk2: Chunk) -> float:
     assert chunk1.x is not None
@@ -425,19 +446,19 @@ class DotProductLabelor(PipelineStep):
     embedding_model: str = field()
     key_name: str = field()
     possible_labels: Optional[List[str]] = field(default=None)
-    cache_file: Optional[str] = field(default=None)
+    cache_dir: Optional[str] = field(default=None)
     prefix: str = field(default="")
 
     def __attrs_post_init__(self):
         assert self.key_name in ["emoji", "keyword"]
-        if self.cache_file is None:
-            self.cache_file = "cache/"+self.key_name+".json" #TODO change when we change the cache file system
+        if self.cache_dir is None:
+            self.cache_dir = "cache/"+self.key_name #TODO change when we change the cache file system
             # by default the name of the cache is the keyname.
         
         if self.possible_labels is None and self.key_name == "emoji":
             self.possible_labels = ALL_EMOJIS
         
-        self.embedder = OpenAIEmbeddor(cache_file=self.cache_file, model=self.embedding_model)
+        self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         assert self.possible_labels is not None, "No possible_labels set."
@@ -467,19 +488,19 @@ class DotProductLabelor(PipelineStep):
 @define
 class EmbeddingSearch(PipelineStep):
     prompt: str = field()
-    cache_file: str = field()
     embedding_model: str = field()
     threshold: Optional[float] = field(default=None)
     embedder: Optional[OpenAIEmbeddor] = field(default=None)
 
     def __attrs_post_init__(self):
-        self.embedder = OpenAIEmbeddor(cache_file=None, model=self.embedding_model)
+        self.embedder = OpenAIEmbeddor(cache_dir=None, model=self.embedding_model)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         # Compute prompt embedding
         assert self.embedder is not None
         t1 = time.time()
         if f"RawSearch:{self.prompt}" not in chunks[0].attribs:
+            print(self.embedder.get_embeddings([self.prompt]))
             prompt_embedding = self.embedder.get_embeddings([self.prompt])[0]
             chunk_embeddings = [chunk.embedding for chunk in chunks if chunk.embedding is not None]
             
@@ -562,18 +583,58 @@ class Pipeline:
 
         return chunks
 
+def default_pipeline_factory() -> Pipeline:
+    return Pipeline([
+        OpenAIEmbeddor(
+            model="text-embedding-3-large", 
+            cache_dir=None,
+            batch_size=2000,
+            ),
+        DotProductLabelor(
+            nb_labels=3,
+            embedding_model="text-embedding-3-large",
+            key_name="emoji",
+        ),
+        UMAPReductor(
+            verbose=True,
+            n_neighbors=20,
+            min_dist=0.05,
+        ),
+        HierachicalLabelMapper(
+            max_number_levels=10,
+            key_name="emoji",
+        )
+    ], verbose=True)
+
 
 @define
 class ChunkCollection:
-    chunks: List[Chunk] = field(
+    chunks: List[Chunk] = field( # TODO fix the type here.
         factory=list
     )  # Is exported as [{og_text: "example", attribs: {"page":2, "title": "bla"}}, ...]
-    pipeline: Pipeline = field(factory=Pipeline)
+    pipeline: Pipeline = field(factory=default_pipeline_factory)
 
     def __attrs_post_init__(self):
+        assert len(self.chunks) > 0, "You have no chunk in your collection!"
+        assert 'Chunk' in str(type(self.chunks[0])) or type(self.chunks[0]) == dict, f"Bad chunk type! {type(self.chunks[0])}"
+
+        if type(self.chunks[0]) == dict:
+            new_chunks = []
+            for i, chunk in enumerate(self.chunks):
+                assert "text" in chunk, "Your chunk must have a text"
+                new_chunk = Chunk(og_text=chunk["text"])
+                for field in ["previous_chunk_index", "next_chunk_index", "display_text"]:
+                    if field in chunk:
+                        new_chunk.__setattr__(field, chunk[field])
+                for k in chunk.keys():
+                    if k not in ["previous_chunk_index", "next_chunk_index", "display_text", "text"]:
+                        new_chunk.attribs[k] = chunk[k]
+                new_chunks.append(new_chunk)
+            self.chunks = new_chunks
+
         for i, chunk in enumerate(self.chunks):
-            if "no_line" in chunk.attribs:
-                chunk.next_chunk_index = i+1
+            if "no_line" in chunk.attribs: # TODO: fix it, so far, still lines. See changes made to the plotting function
+                chunk.next_chunk_index = i
                 chunk.previous_chunk_index = i
             else:
                 if i < len(self.chunks)-1:
@@ -599,60 +660,70 @@ class ChunkCollection:
         self.chunks = step.process(self.chunks)
         self.__attrs_post_init__()
 
-# # %%
-# import numpy as np
-# import matplotlib.pyplot as plt
+    def save(self, filename: str) -> None:
+        """
+        Save the ChunkCollection to a file.
+        """
+        def chunk_to_dict(chunk: Chunk) -> dict:
+            def convert_to_serializable(obj):
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                elif isinstance(obj, np.floating):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return obj
 
-# def crush_and_boost(values, threshold, sharpness=10):
-#     """
-#     Crush values below the threshold towards 0 and boost values above the threshold towards 1.
-    
-#     Args:
-#     - values (array-like): Array of input values to transform.
-#     - threshold (float): The threshold value for the transformation.
-#     - sharpness (float): Controls the steepness of the transition (higher values = sharper transition).
-    
-#     Returns:
-#     - transformed_values (numpy array): The transformed array.
-#     """
-#     # Apply a logistic function with a custom threshold
-#     values = np.clip(values, 0, 1)
-    
-#     # Apply a modified logistic function
-#     logistic = 1 / (1 + np.exp(-sharpness * (values - threshold)))
-    
-#     # Scale the logistic function to meet the requirements
-#     delta = (logistic - 0.5) * np.minimum(values, 1 - values) * 2
-#     transformed_values = values + delta
-    
-#     # Ensure output values are between 0 and 1
-#     transformed_values = np.clip(transformed_values, 0, 1)
-    
-#     return transformed_values
+            chunk_dict = {
+                'og_text': chunk.og_text,
+                'x': convert_to_serializable(chunk.x),
+                'y': convert_to_serializable(chunk.y),
+                'text': chunk.text,
+                'display_text': chunk.display_text,
+                'attribs': {k: convert_to_serializable(v) for k, v in chunk.attribs.items()},
+                'id': chunk.id,
+                'previous_chunk_index': chunk.previous_chunk_index,
+                'next_chunk_index': chunk.next_chunk_index,
+            }
+            if chunk.embedding is not None:
+                # Convert numpy array to bytes, then to base64
+                embedding_bytes = chunk.embedding.tobytes()
+                embedding_base64 = base64.b64encode(embedding_bytes).decode('utf-8')
+                chunk_dict['embedding'] = embedding_base64
+            return chunk_dict
 
-# # Define the range of input values
-# x = np.linspace(0, 1, 500)
+        serialized_chunks = [chunk_to_dict(chunk) for chunk in self.chunks]
 
-# # Parameters for the transformation
-# threshold = 0.15
-# sharpness = 10
+        with open(filename, 'w') as f:
+            json.dump(serialized_chunks, f)
+        
+    @classmethod
+    def load_from_file(cls, filename: str) -> 'ChunkCollection':
+        """
+        Load a ChunkCollection from a file.
+        """
+        with open(filename, 'r') as f:
+            serialized_chunks = json.load(f)
 
-# # Apply the transformation
-# y = crush_and_boost(x, threshold, sharpness)
+        def dict_to_chunk(chunk_dict: dict) -> Chunk:
+            embedding = None
+            if 'embedding' in chunk_dict:
+                # Convert base64 to bytes, then to numpy array
+                embedding_bytes = base64.b64decode(chunk_dict['embedding'])
+                embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
 
-# # Plotting
-# plt.figure(figsize=(10, 6))
-# plt.plot(x, y, label=f'Sigmoid-like function (threshold={threshold}, sharpness={sharpness})')
-# plt.axvline(threshold, color='red', linestyle='--', label='Threshold')
-# plt.axhline(0, color='black', linestyle='--', linewidth=0.5)
-# plt.axhline(1, color='black', linestyle='--', linewidth=0.5)
-# plt.title('Crush and Boost Function')
-# plt.xlabel('Input Value')
-# plt.ylabel('Transformed Value')
-# plt.legend()
-# plt.grid(True)
-# plt.show()
+            return Chunk(
+                og_text=chunk_dict['og_text'],
+                x=chunk_dict.get('x'),
+                y=chunk_dict.get('y'),
+                embedding=embedding,
+                text=chunk_dict['text'],
+                display_text=chunk_dict['display_text'],
+                attribs=chunk_dict['attribs'],
+                id=chunk_dict['id'],
+                previous_chunk_index=chunk_dict['previous_chunk_index'],
+                next_chunk_index=chunk_dict['next_chunk_index']
+            )
 
-# # %%
-
-# %%
+        chunks = [dict_to_chunk(chunk_dict) for chunk_dict in serialized_chunks]
+        return cls(chunks=chunks)

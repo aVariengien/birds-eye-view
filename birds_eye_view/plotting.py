@@ -41,13 +41,15 @@ from bokeh.layouts import column, row
 from bokeh.palettes import Category20, Viridis256
 from bokeh.transform import factor_cmap
 from markdownify import markdownify as md
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from bokeh.embed import file_html # type: ignore
 from bokeh.resources import CDN # type: ignore
 
 import webbrowser
 import tempfile
+
+DEFAULT_VIS_FIELD = ["emoji", "title", "doc_position", "page", "url", "index"]
 
 def open_html_in_browser(html_content):
     # Create a temporary file
@@ -269,7 +271,7 @@ def remove_elements(l, to_remove):
 
 def visualize_chunks(
     chunk_collection: ChunkCollection,
-    fields_to_include: List[str],
+    fields_to_include: Optional[List[str]] = None,
     n_connections: int=5,
     document_to_show: Optional[str]=None,
     return_html=False,
@@ -281,7 +283,19 @@ def visualize_chunks(
         * document_to_show, if None all documents are shown, if not none, only the document with this url will be displayed.
         * return_html. If True, retruns a string containing the html code. Else open a webbrowser and show the plot.
     """
+    assert len(chunk_collection.chunks) > 0, "Empty chunk collection !"
     
+    if fields_to_include is None:
+        fields_to_include = list(
+                set(
+                    list(chunk_collection.chunks[0].attribs.keys())
+                    + DEFAULT_VIS_FIELD
+                )
+            )
+        for f in ["emoji_label_list"]:
+            if f in fields_to_include:
+                fields_to_include.remove(f)
+
     # Prepare data
     existing_fields = []
     for f in fields_to_include:
@@ -373,7 +387,7 @@ def visualize_chunks(
             if type(source.data[field][0]) == list:
                 source.data[field] = [
                     str(l) for l in source.data[field]
-                ]  # TODO: keep the first elements of the  list so there's less than 20 elements
+                ]  
 
             if source.data[field] and type(source.data[field][0]) == str:
                 source.data[field] = [
@@ -394,7 +408,7 @@ def visualize_chunks(
                 )
             else:
                 unique_values = list(set(source.data[field]))
-                color_mapper = CategoricalColorMapper(
+                color_mapper = CategoricalColorMapper( #type: ignore
                     factors=unique_values, palette=cc.glasbey[: len(unique_values)]
                 )
 
@@ -431,10 +445,10 @@ def visualize_chunks(
     # Add tools
     # hover = HoverTool(renderers=[circles], tooltips=[("Text", "@hover_texts")])
     # p.add_tools(hover)
-    hover = HoverTool(tooltips=[("Text", "@hover_texts")])
+    hover = HoverTool(tooltips=[("Text", "@hover_texts")], renderers=[glyph for glyph in field_glyphs.values()])
     hover.tooltips = """
         @hover_texts | Value: @val_on_display
-    """
+    """ # type: ignore
     p.add_tools(hover)
     p.add_tools(TapTool())
 
