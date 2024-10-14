@@ -447,11 +447,12 @@ class DotProductLabelor(PipelineStep):
     key_name: str = field()
     possible_labels: Optional[List[str]] = field(default=None)
     cache_dir: Optional[str] = field(default=None)
+    no_cache: bool = field(default=False)
     prefix: str = field(default="")
 
     def __attrs_post_init__(self):
         assert self.key_name in ["emoji", "keyword"]
-        if self.cache_dir is None:
+        if self.cache_dir is None and not self.no_cache:
             self.cache_dir = "cache/"+self.key_name #TODO change when we change the cache file system
             # by default the name of the cache is the keyname.
         
@@ -594,6 +595,7 @@ def default_pipeline_factory() -> Pipeline:
             nb_labels=3,
             embedding_model="text-embedding-3-large",
             key_name="emoji",
+            no_cache=True,
         ),
         UMAPReductor(
             verbose=True,
@@ -616,21 +618,7 @@ class ChunkCollection:
 
     def __attrs_post_init__(self):
         assert len(self.chunks) > 0, "You have no chunk in your collection!"
-        assert 'Chunk' in str(type(self.chunks[0])) or type(self.chunks[0]) == dict, f"Bad chunk type! {type(self.chunks[0])}"
-
-        if type(self.chunks[0]) == dict:
-            new_chunks = []
-            for i, chunk in enumerate(self.chunks):
-                assert "text" in chunk, "Your chunk must have a text"
-                new_chunk = Chunk(og_text=chunk["text"])
-                for field in ["previous_chunk_index", "next_chunk_index", "display_text"]:
-                    if field in chunk:
-                        new_chunk.__setattr__(field, chunk[field])
-                for k in chunk.keys():
-                    if k not in ["previous_chunk_index", "next_chunk_index", "display_text", "text"]:
-                        new_chunk.attribs[k] = chunk[k]
-                new_chunks.append(new_chunk)
-            self.chunks = new_chunks
+        assert 'Chunk' in str(type(self.chunks[0])), f"Bad chunk type! {type(self.chunks[0])}"
 
         for i, chunk in enumerate(self.chunks):
             if "no_line" in chunk.attribs: # TODO: fix it, so far, still lines. See changes made to the plotting function
@@ -660,7 +648,7 @@ class ChunkCollection:
         self.chunks = step.process(self.chunks)
         self.__attrs_post_init__()
 
-    def save(self, filename: str) -> None:
+    def save(self, filename: Optional[str] = None, return_data: bool = False):
         """
         Save the ChunkCollection to a file.
         """
@@ -687,30 +675,56 @@ class ChunkCollection:
             }
             if chunk.embedding is not None:
                 # Convert numpy array to bytes, then to base64
-                embedding_bytes = chunk.embedding.tobytes()
+                embedding_bytes = chunk.embedding.astype(np.float16).tobytes()
                 embedding_base64 = base64.b64encode(embedding_bytes).decode('utf-8')
                 chunk_dict['embedding'] = embedding_base64
             return chunk_dict
 
         serialized_chunks = [chunk_to_dict(chunk) for chunk in self.chunks]
 
-        with open(filename, 'w') as f:
-            json.dump(serialized_chunks, f)
+        if return_data:
+            return json.dumps(serialized_chunks)
+        else:
+            assert type(filename) == str
+            with open(filename, 'w') as f:
+                json.dump(serialized_chunks, f)
         
+
     @classmethod
-    def load_from_file(cls, filename: str) -> 'ChunkCollection':
+    def load_from_list(cls, dicts: List[Dict], pipeline: Optional[Pipeline] = None) -> 'ChunkCollection':
+        new_chunks = []
+        for i, chunk in enumerate(dicts):
+            assert "text" in chunk, "Your chunk must have a text"
+            new_chunk = Chunk(og_text=chunk["text"])
+            for field in ["previous_chunk_index", "next_chunk_index", "display_text"]:
+                if field in chunk:
+                    new_chunk.__setattr__(field, chunk[field])
+            for k in chunk.keys():
+                if k not in ["previous_chunk_index", "next_chunk_index", "display_text", "text"]:
+                    new_chunk.attribs[k] = chunk[k]
+            new_chunks.append(new_chunk)
+        
+        if pipeline is None:
+            pipeline = default_pipeline_factory()
+        return cls(chunks=new_chunks, pipeline=pipeline)
+
+    @classmethod
+    def load_from_file(cls, source: str | Any) -> 'ChunkCollection':
         """
         Load a ChunkCollection from a file.
         """
-        with open(filename, 'r') as f:
-            serialized_chunks = json.load(f)
+        if type(source) == str:
+            with open(source, 'r') as f:
+                serialized_chunks = json.load(f)
+        else:
+            serialized_chunks = json.load(source) # type: ignore
 
         def dict_to_chunk(chunk_dict: dict) -> Chunk:
             embedding = None
             if 'embedding' in chunk_dict:
                 # Convert base64 to bytes, then to numpy array
                 embedding_bytes = base64.b64decode(chunk_dict['embedding'])
-                embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+                embedding = np.frombuffer(embedding_bytes, dtype=np.float16)
 
             return Chunk(
                 og_text=chunk_dict['og_text'],

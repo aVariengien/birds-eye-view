@@ -28,6 +28,7 @@ from bokeh.models import (  # type: ignore
     LabelSet,
     Label,
 )
+from bokeh.models.css import Styles
 from bokeh.layouts import column, row
 from bokeh.palettes import Category20, Category10  # type: ignore
 from bokeh.transform import factor_cmap  # type: ignore
@@ -50,6 +51,15 @@ import webbrowser
 import tempfile
 
 DEFAULT_VIS_FIELD = ["emoji", "title", "doc_position", "page", "url", "index"]
+
+def put_field_first(x, l):
+    prev = l[0]
+    if x in l:
+        old_x_idx = l.index(x)
+        l[old_x_idx] = prev
+        l[0] = x
+    else:
+        l.insert(0, x)
 
 def open_html_in_browser(html_content):
     # Create a temporary file
@@ -104,7 +114,7 @@ def create_callbacks(source, text_div, prev_lines, next_lines, n_connections):
             source.data['active_chunk'][0] = new_active_index;
             source.selected.indices = [new_active_index];
             var text = source.data['text'][new_active_index] || '';
-            text_div.text = text + '<br><br> Value: ' + source.data['val_on_display'][new_active_index];
+            text_div.text = text + '<br><br>' + source.data['active_chunk'][1] + ': ' + source.data['val_on_display'][new_active_index];
 
             // Hide all lines initially
             prev_lines.forEach(line => line.visible = false);
@@ -113,27 +123,32 @@ def create_callbacks(source, text_div, prev_lines, next_lines, n_connections):
             var current_index = new_active_index;
             // Show previous connections
             for (var i = 0; i < n_connections; i++) {
-                var prev_chunk = new_active_index - i - 1;
-                if (prev_chunk >= 0) {
-                    prev_lines[i].data_source.data['x'] = [source.data['x'][new_active_index - i], source.data['x'][prev_chunk]];
-                    prev_lines[i].data_source.data['y'] = [source.data['y'][new_active_index - i], source.data['y'][prev_chunk]];
+                var prev_chunk = source.data['prev_chunk'][current_index];
+                if (prev_chunk !== new_active_index && prev_chunk !== current_index) {
+                    prev_lines[i].data_source.data['x'] = [source.data['x'][current_index], source.data['x'][prev_chunk]];
+                    prev_lines[i].data_source.data['y'] = [source.data['y'][current_index], source.data['y'][prev_chunk]];
                     prev_lines[i].visible = true;
+                    current_index = prev_chunk;
                 } else {
                     break;
                 }
             }
             
+            current_index = new_active_index;
+
             // Show next connections
             for (var i = 0; i < n_connections; i++) {
-                var next_chunk = new_active_index + i + 1;
-                if (next_chunk < source.data['x'].length) {
-                    next_lines[i].data_source.data['x'] = [source.data['x'][new_active_index + i], source.data['x'][next_chunk]];
-                    next_lines[i].data_source.data['y'] = [source.data['y'][new_active_index + i], source.data['y'][next_chunk]];
+                var next_chunk = source.data['next_chunk'][current_index];
+                if (next_chunk !== null && next_chunk !== current_index) {
+                    next_lines[i].data_source.data['x'] = [source.data['x'][current_index], source.data['x'][next_chunk]];
+                    next_lines[i].data_source.data['y'] = [source.data['y'][current_index], source.data['y'][next_chunk]];
                     next_lines[i].visible = true;
+                    current_index = next_chunk;
                 } else {
                     break;
                 }
             }
+
             prev_lines.forEach(line => line.data_source.change.emit());
             next_lines.forEach(line => line.data_source.change.emit());
             source.change.emit();
@@ -203,10 +218,11 @@ def create_callbacks(source, text_div, prev_lines, next_lines, n_connections):
     return callback, go_previous, go_next
 
 
+
 def create_navigation_buttons(go_previous, go_next):
-    button_left = Button(label="⬅️", width=50)
+    button_left = Button(label="⬅️", width=50, styles=Styles(opacity="0.75"))
     button_left.js_on_click(go_previous)
-    button_right = Button(label="➡️", width=50)
+    button_right = Button(label="➡️", width=50, styles=Styles(opacity="0.75"))
     button_right.js_on_click(go_next)
     return button_left, button_right
 
@@ -295,6 +311,8 @@ def visualize_chunks(
         for f in ["emoji_label_list"]:
             if f in fields_to_include:
                 fields_to_include.remove(f)
+        if "emoji" in fields_to_include:
+            put_field_first("emoji", fields_to_include)
 
     # Prepare data
     existing_fields = []
@@ -442,6 +460,7 @@ def visualize_chunks(
     field_glyphs[fields_to_include[0]].visible = True
     color_bars[fields_to_include[0]].visible = True
     additional_glyph[fields_to_include[0]].visible = True
+    source.data['active_chunk'][1] = fields_to_include[0]
     # Add tools
     # hover = HoverTool(renderers=[circles], tooltips=[("Text", "@hover_texts")])
     # p.add_tools(hover)
@@ -495,15 +514,15 @@ def visualize_chunks(
         ),
         code="""
         var selected_field = cb_obj.value;
+        source.data['active_chunk'][1] = selected_field;
         for (let i = 0; i < source.data['val_on_display'].length; i++) {
-            source.data['val_on_display'][i] = source.data[selected_field][i]
+            source.data['val_on_display'][i] = source.data[selected_field][i];
         }
         for (var field in field_glyphs) {
             field_glyphs[field].visible = (field === selected_field);
             color_bars[field].visible = (field === selected_field);
             additional_glyph[field].visible = (field === selected_field);
         }
-
     """,
     )
 
@@ -571,7 +590,7 @@ def visualize_chunks(
 
     # Create callbacks
     callback, go_previous, go_next = create_callbacks(
-        source, text_div, prev_lines, next_lines, n_connections
+        source, text_div, prev_lines, next_lines, n_connections,
     )
 
     # Create navigation buttons

@@ -153,7 +153,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
         OpenAIEmbeddor(
             model=embedding_model, 
             cache_dir=cache_dir,
-            batch_size=1000,
+            batch_size=2000,
             ),
         DotProductLabelor(
             possible_labels=ALL_EMOJIS,
@@ -216,58 +216,32 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
         step=0.01,
         on_change=update_search,
     )
+
+@st.cache_data
+def save(_collection, name):
+    # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    return _collection.save(return_data=True)
+
 with st.sidebar.expander("Save and load", expanded=False, icon="💾"):
     st.header("Manage Chunk Collection")
 
-    save_name = st.text_input("Enter name to save:", "my_collection")
-
-    if st.button("💾 Save Collection"):
-        if (
-            "chunk_collection" in st.session_state
-            and st.session_state.chunk_collection is not None
-        ):
-            try:
-                saved_path = save_chunk_collection(
-                    st.session_state.chunk_collection, save_name
-                )
-                st.success(f"Collection saved successfully as {saved_path}")
-            except Exception as e:
-                st.error(f"An error occurred while saving the collection: {str(e)}")
-        else:
-            st.warning("No chunk collection available to save.")
-
-    # Load section
-    load_name = st.text_input("Enter name to load:", "my_collection")
-
-    if st.button("⬆️ Load Collection"):
-        try:
-            loaded_collection = load_chunk_collection(load_name)
-            st.session_state.chunk_collection = loaded_collection
-            st.success(f"Collection '{load_name}' loaded successfully!")
-            st.rerun()
-        except FileNotFoundError:
-            st.error(
-                f"File '{load_name}.pkl' not found in the 'saved_collections' directory."
-            )
-        except Exception as e:
-            st.error(f"An error occurred while loading the collection: {str(e)}")
-
+    st.download_button(
+        label="💾 Download collection",
+        data=save(st.session_state.chunk_collection, "hello"),
+        file_name="chunk_collection.json",
+    )
+    
+    uploaded_file = st.file_uploader("⬆️ Load Collection")
+    if uploaded_file is not None:
+        # To read file as bytes:
+        st.session_state.chunk_collection = ChunkCollection.load_from_file(uploaded_file)
 
     # Text input for plot name
-    st.header("📊 Save Interactive Plot")
-    plot_name = st.text_input("Plot name:", "my_plot")
-
-    # Button to save the plot
-    if st.button("📊 Save Plot"):
-        if st.session_state.bokeh_plot is not None:
-            try:
-                saved_path = save_bokeh_plot(st.session_state.bokeh_plot, plot_name)
-                st.success(f"Plot saved successfully as {saved_path}")
-            except Exception as e:
-                st.error(f"An error occurred while saving the plot: {str(e)}")
-        else:
-            st.warning("No plot available to save. Please create a plot first.")
-
+    st.download_button(
+        label="📊 Download Interactive Plot",
+        data=st.session_state.bokeh_plot,
+        file_name=f"birds_eye_view_plot.html",
+    )
 
 
 
