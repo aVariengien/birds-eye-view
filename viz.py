@@ -81,6 +81,7 @@ def update_search():
         prompt=search_prompt,
         threshold=search_threshold,
         embedding_model=embedding_model,
+        api_key=api_key
     )
     st.session_state.chunk_collection.apply_step(embedding_search)
     st.session_state.vis_field = "Search:" + search_prompt
@@ -190,7 +191,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
         max_chunk = None
 
     chunk_size = st.slider(
-        "Chunk Size", min_value=50, max_value=2000, value=400, step=50
+        "Chunk Size", min_value=50, max_value=2000, value=600, step=50
     )
     # Visualization options
     embedding_model = st.selectbox(

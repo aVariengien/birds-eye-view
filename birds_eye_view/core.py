@@ -496,9 +496,10 @@ class EmbeddingSearch(PipelineStep):
     embedding_model: str = field()
     threshold: Optional[float] = field(default=None)
     embedder: Optional[OpenAIEmbeddor] = field(default=None)
+    api_key: Optional[str] = field(default=None)
 
     def __attrs_post_init__(self):
-        self.embedder = OpenAIEmbeddor(cache_dir=None, model=self.embedding_model)
+        self.embedder = OpenAIEmbeddor(cache_dir=None, model=self.embedding_model, api_key=self.api_key)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         # Compute prompt embedding
