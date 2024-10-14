@@ -101,6 +101,7 @@ def create_chunk_collection(document_names, max_chunk, pipeline_code):
         chunks = st.session_state.chunks[:max_chunk]
     
     pipeline = eval(pipeline_code)
+    os.write(1, f"{"Hello! Test1"}\n".encode())
     os.write(1, f"{pipeline.steps[0].api_key}\n".encode())
     print("Loaded files!")
     return ChunkCollection(chunks=chunks, pipeline=pipeline)
