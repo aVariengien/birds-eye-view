@@ -1,6 +1,9 @@
 # 🦉 Bird's Eye View
 
-_Note: This tool is experimental, and under active developement._
+⏩️ Online app available [here](https://birds-eye-view.streamlit.app/)
+
+<br>
+<br>
 
 <img src="img/plan-of-Imola.jpg" alt="drawing" width="500"/>
 
@@ -30,17 +33,23 @@ The goal of **🦉 Bird's Eye View** is to create a maps of this space, enabling
 
 ## Setup
 
+To run locally:
 ```
-pip install -r requirements.txt
-touch cache/cache.json
+pip install -e .
 streamlit run viz.py
 ```
 
 You need to have `OPENAI_API_KEY` defined in your environment variables. I advise adding `export OPENAI_API_KEY=sk-...` in your `.bashrc`.
 
-The project is in very early stage, and will probably show errors, e.g. if you tick `Use qualitative colors` but display a continuous value (e.g. search results).
+The project is in very early stage, and might return errors.
 
 **Price:** The large embedding model is at $0.130 / 1M tokens. A 400 character chunks is ~ 80 tokens. So a corpus of 1000 chunks is ~ $0.01. Given how cheap it is, I'd advise using the large embedding model over the small one.
+
+## Usage and tutorials
+
+The project contains an interactive application (also available online [here](https://birds-eye-view.streamlit.app/)), and a Python library `birds_eye_view`.
+
+You can check the tutorials at `tutorials` to learn to use the python API. The notebook `minimal_example.py` is just you need to know to display a map of a list of strings, while `mmlu.py` presents the whole pipeline.
 
 ## Walkthrough
 
@@ -88,8 +97,6 @@ It seems a bit more specific, the previous outlier point lights up much less.
 You got it, the goal is to engage in a back and forth to understand what precisely makes this cluster unique. 
 
 After understanding the content of many clusters, one can increase `n_neighbors` and look at the global structure of the map.
-
-
 
 ## Future Use Cases
 
