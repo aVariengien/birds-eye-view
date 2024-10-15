@@ -126,7 +126,7 @@ if st.session_state.chunk_collection is None:
     st.title("🦉 Bird's Eye View")
     st.markdown("""
     Welcome to Bird's Eye View!
-    Start by loading documents or use our pre-loaded collections.
+    Start by loading documents or use a pre-loaded collections below 👇.
 
     """)
 
@@ -137,14 +137,14 @@ if st.session_state.chunk_collection is None:
         if st.button("📚 Load MMLU"):
             st.session_state.chunk_collection = load_chunk_collection("mmlu.json")
             st.rerun()
-        st.markdown("7000 multiple-choice questions from the MMLU benchmark, a comprehensive LLM set of tests 57 subjects.")
+        st.markdown("7000 multiple-choice questions from the MMLU benchmark, a comprehensive LLM test covering 57 subjects.")
 
 
     with col2:
         if st.button("⛵️ Load *The Voyage of the Beagle*"):
             st.session_state.chunk_collection = load_chunk_collection("beagle.json")
             st.rerun()
-        st.markdown("*The Voyage of the Beagle* by Charles Darwin is a 300-page travel diary of his 1831-1836 expedition in South America that made the biologist famous.")
+        st.markdown("*The Voyage of the Beagle* by Charles Darwin, a 300-page travel diary of his 1831-1836 expedition in South America that made the biologist famous.")
 
 
 
