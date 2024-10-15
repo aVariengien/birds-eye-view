@@ -212,7 +212,8 @@ class OpenAIEmbeddor(PipelineStep):
             os.makedirs(self.cache_dir, exist_ok=True)
         if self.api_key is not None and len(self.api_key) > 0:
             self.client.api_key = self.api_key
-
+        else:
+            self.client.api_key = getenv("OPENAI_API_KEY")
     def load_cache(self):
         t1 = time.time()
         if self.cache_dir:
@@ -355,7 +356,6 @@ class HierachicalLabelMapper(PipelineStep):
             chunk1, chunk2 = rd.sample(chunks, 2)
             distances.append(dist(chunk1, chunk2))
         map_diameter = np.percentile(distances, 90)
-        print("Map diameter:", map_diameter)
 
         hierarchical_labels: dict[int, List[str]] = {}
         for i in range(len(chunks)):
@@ -372,8 +372,7 @@ class HierachicalLabelMapper(PipelineStep):
         for j in range(tail_length, 0, -1):
             radiuses.append((last_radius-min_distance)*(j/(tail_length+1)) + min_distance)
         radiuses.append(0.0)
-        
-        print(radiuses)
+    
 
         points = np.array([[chunk.x, chunk.y] for chunk in chunks])
 
@@ -381,7 +380,6 @@ class HierachicalLabelMapper(PipelineStep):
         step = 0
         while step < self.max_number_levels and not last_turn:
             radius = radiuses[step] if step < self.max_number_levels -1 else 0 # for the last step, radius is zero
-            print("radius", radius)
             if last_turn:
                 radius = 0
 
@@ -429,13 +427,8 @@ class HierachicalLabelMapper(PipelineStep):
             for label in hierarchical_labels[i][:(-tail_length-1)]:
                 for k in range(tail_length+1):
                     display_list.append(label)
-            if i == 0:
-                print(len(hierarchical_labels[i][:(-tail_length-1)]))
             for label in hierarchical_labels[i][-tail_length-1:]:
                 display_list.append(label)
-            if i == 0:
-                print(len(display_list))
-
             chunk.attribs[self.key_name + "_list"] = ",".join(display_list)
             
             #print(",".join(hierarchical_labels[i]))
@@ -600,7 +593,7 @@ def default_pipeline_factory() -> Pipeline:
             nb_labels=3,
             embedding_model="text-embedding-3-large",
             key_name="emoji",
-            no_cache=True,
+            no_cache=False,
         ),
         UMAPReductor(
             verbose=True,
@@ -696,7 +689,14 @@ class ChunkCollection:
         
 
     @classmethod
-    def load_from_list(cls, dicts: List[Dict], pipeline: Optional[Pipeline] = None) -> 'ChunkCollection':
+    def load_from_list(cls, l: List[Any], pipeline: Optional[Pipeline] = None) -> 'ChunkCollection':
+        assert len(l) > 0
+
+        if type(l[0]) == str:
+            dicts = [{"text" : s} for s in l]
+        else:
+            dicts = l
+        
         new_chunks = []
         for i, chunk in enumerate(dicts):
             assert "text" in chunk, "Your chunk must have a text"

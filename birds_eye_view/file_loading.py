@@ -436,7 +436,7 @@ def load_file(
 
 
 def load_files(
-    file_paths: List[str], max_chunk: Optional[int] = 100, chunk_size: int = 800
+    file_paths: List[str], max_chunk: Optional[int] = None, chunk_size: int = 800
 ) -> List[Chunk]:
     """
     Load multiple files or URLs in parallel and return a list of chunks.

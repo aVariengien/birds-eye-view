@@ -288,6 +288,7 @@ def remove_elements(l, to_remove):
 def visualize_chunks(
     chunk_collection: ChunkCollection,
     fields_to_include: Optional[List[str]] = None,
+    fist_field: Optional[str] = None,
     n_connections: int=5,
     document_to_show: Optional[str]=None,
     return_html=False,
@@ -308,11 +309,14 @@ def visualize_chunks(
                     + DEFAULT_VIS_FIELD
                 )
             )
-        for f in ["emoji_label_list"]:
+        for f in ["emoji_label_list", "no_line"]:
             if f in fields_to_include:
                 fields_to_include.remove(f)
-        if "emoji" in fields_to_include:
-            put_field_first("emoji", fields_to_include)
+        if fist_field is None:
+            if "emoji" in fields_to_include:
+                put_field_first("emoji", fields_to_include)
+        else:
+            put_field_first(fist_field, fields_to_include)
 
     # Prepare data
     existing_fields = []
