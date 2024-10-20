@@ -123,10 +123,7 @@ st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="
 
 def is_streamlit_cloud():
     # Check for environment variables that are specific to Streamlit Cloud
-    return (
-        os.environ.get("STREAMLIT_SHARING_MODE") == "streamlit_auth" or
-        os.environ.get("IS_STREAMLIT_CLOUD") == "true"
-    )
+    return st.runtime.exists()
 
 
 st.info("Where do you run?")
