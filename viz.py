@@ -125,20 +125,8 @@ st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="
 
 def is_streamlit_cloud():
     # Check for environment variables that are specific to Streamlit Cloud
-    return platform.processor() is None
+    return platform.processor() == ""
 
-
-st.info("Where do you run?")
-
-# Usage
-if is_streamlit_cloud():
-    st.info("Running on Streamlit Cloud")
-else:
-    st.info(f"Running locally {platform.processor()}")
-    st.info(f"Running locally {platform.processor() == ""}")
-    st.info(f"Running locally {platform.machine()}")
-    st.info(f"Running locally {platform.node()}")
-    st.info(f"Running locally {platform.system()}")
 
 # Welcome
 if st.session_state.chunk_collection is None:
@@ -208,32 +196,58 @@ with st.sidebar:
 with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
     cache_dir = st.text_input("Cache folder", "cache/")
 
-
-    pipeline_code = """Pipeline([OpenAIEmbeddor(
-            model=embedding_model, 
-            batch_size=2000,
-            api_key=api_key
+    if is_streamlit_cloud():
+        pipeline_code = """Pipeline([OpenAIEmbeddor(
+                model=embedding_model, 
+                batch_size=2000,
+                api_key=api_key
+                ),
+            DotProductLabelor(
+                possible_labels=ALL_EMOJIS,
+                nb_labels=3,
+                embedding_model=embedding_model,
+                key_name="emoji",
+                prefix="",
+                api_key=api_key
             ),
-        DotProductLabelor(
-            possible_labels=ALL_EMOJIS,
-            nb_labels=3,
-            embedding_model=embedding_model,
-            key_name="emoji",
-            prefix="",
-            api_key=api_key
-        ),
-        UMAPReductor(
-            verbose=True,
-            n_neighbors=20,
-            min_dist=0.05,
-            random_state=42,
-            n_jobs=1,
-        ),
-        HierachicalLabelMapper(
-            max_number_levels=10,
-            key_name="emoji",
-        )
-    ], verbose=True)""",
+            UMAPReductor(
+                verbose=True,
+                n_neighbors=20,
+                min_dist=0.05,
+                random_state=42,
+                n_jobs=1,
+            ),
+            HierachicalLabelMapper(
+                max_number_levels=10,
+                key_name="emoji",
+            )
+        ], verbose=True)"""
+    else:
+        pipeline_code = st.text_area("Pipeline Code", value="""Pipeline([OpenAIEmbeddor(
+                model=embedding_model, 
+                batch_size=2000,
+                api_key=api_key
+                ),
+            DotProductLabelor(
+                possible_labels=ALL_EMOJIS,
+                nb_labels=3,
+                embedding_model=embedding_model,
+                key_name="emoji",
+                prefix="",
+                api_key=api_key
+            ),
+            UMAPReductor(
+                verbose=True,
+                n_neighbors=20,
+                min_dist=0.05,
+                random_state=42,
+                n_jobs=1,
+            ),
+            HierachicalLabelMapper(
+                max_number_levels=10,
+                key_name="emoji",
+            )
+        ], verbose=True)""")
     if not os.path.exists(cache_dir):
         with open(cache_dir, 'a'):
             os.utime(cache_dir, None)
