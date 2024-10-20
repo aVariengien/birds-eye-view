@@ -128,6 +128,9 @@ def is_streamlit_cloud():
         os.environ.get("IS_STREAMLIT_CLOUD") == "true"
     )
 
+
+st.info("Where do you run?")
+
 # Usage
 if is_streamlit_cloud():
     st.info("Running on Streamlit Cloud")
