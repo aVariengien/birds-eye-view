@@ -26,6 +26,8 @@ from bokeh.resources import CDN # type: ignore
 from bokeh.embed import file_html # type: ignore
 import re
 
+import platform
+
 # Ensure the 'saved_collections' directory exists
 if not os.path.exists("saved_collections"):
     os.makedirs("saved_collections")
@@ -123,7 +125,7 @@ st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="
 
 def is_streamlit_cloud():
     # Check for environment variables that are specific to Streamlit Cloud
-    return st.runtime.exists()
+    return platform.processor() is None
 
 
 st.info("Where do you run?")
