@@ -135,6 +135,7 @@ if is_streamlit_cloud():
     st.info("Running on Streamlit Cloud")
 else:
     st.info(f"Running locally {platform.processor()}")
+    st.info(f"Running locally {platform.processor() == ""}")
     st.info(f"Running locally {platform.machine()}")
     st.info(f"Running locally {platform.node()}")
     st.info(f"Running locally {platform.system()}")
