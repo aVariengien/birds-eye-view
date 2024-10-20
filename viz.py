@@ -178,7 +178,7 @@ file_paths = st.sidebar.text_area(
 run_pipeline = st.sidebar.button("⏩️ Run Pipeline")
 
 # Additional information
-st.sidebar.info("Hover over points to see chunk text. Click to highlight a chunk.")
+st.sidebar.info("Hover over points to see chunk text. Click to highlight a chunk. Use the arrows to navigate to the previous/next chunk.")
 
 # Add EmbeddingSearch configuration
 st.sidebar.header("Embedding Search")
@@ -226,7 +226,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
         pipeline_code = st.text_area("Pipeline Code", value="""Pipeline([OpenAIEmbeddor(
                 model=embedding_model, 
                 batch_size=2000,
-                api_key=api_key
+                api_key=api_key,
                 ),
             DotProductLabelor(
                 possible_labels=ALL_EMOJIS,
