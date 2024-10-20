@@ -134,7 +134,10 @@ st.info("Where do you run?")
 if is_streamlit_cloud():
     st.info("Running on Streamlit Cloud")
 else:
-    st.info("Running locally")
+    st.info(f"Running locally {platform.processor()}")
+    st.info(f"Running locally {platform.machine()}")
+    st.info(f"Running locally {platform.node()}")
+    st.info(f"Running locally {platform.system()}")
 
 # Welcome
 if st.session_state.chunk_collection is None:
