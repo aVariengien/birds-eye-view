@@ -181,11 +181,12 @@ run_pipeline = st.sidebar.button("⏩️ Run Pipeline")
 st.sidebar.info("Hover over points to see chunk text. Click to highlight a chunk. Use the arrows to navigate to the previous/next chunk.")
 
 # Add EmbeddingSearch configuration
-st.sidebar.header("Embedding Search")
-st.sidebar.markdown("*Enter a search query to highlight the chunks that relate to it.*")
 
 with st.sidebar:
     with st.form(key="Fuzzy Search"):
+        st.sidebar.header("Embedding Search")
+        st.sidebar.markdown("*Enter a search query to highlight the chunks that relate to it.*")
+
         search_prompt = st.text_area(
             "Search Prompt", placeholder="Enter a prompt to show the related chunks.", 
         )
