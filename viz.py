@@ -121,6 +121,19 @@ if "chunk_collection" not in st.session_state:
 st.set_page_config(page_title="🦉 Bird's eye view", page_icon="🦉", layout="wide")
 
 
+def is_streamlit_cloud():
+    # Check for environment variables that are specific to Streamlit Cloud
+    return (
+        os.environ.get("STREAMLIT_SHARING_MODE") == "streamlit_auth" or
+        os.environ.get("IS_STREAMLIT_CLOUD") == "true"
+    )
+
+# Usage
+if is_streamlit_cloud():
+    st.info("Running on Streamlit Cloud")
+else:
+    st.info("Running locally")
+
 # Welcome
 if st.session_state.chunk_collection is None:
     st.title("🦉 Bird's Eye View")
@@ -152,10 +165,16 @@ if st.session_state.chunk_collection is None:
 st.sidebar.title("🦉 Bird's eye view")
 st.sidebar.markdown("*Take a look at your documents from above.*")
 
-if "OpenAI_key" not in st.secrets:
-    api_key = st.sidebar.text_input("Enter your OpenAI API key:")
-else:
-    api_key = st.secrets["OpenAI_key"]
+try:
+    if "OpenAI_key" not in st.secrets:
+        api_key = st.sidebar.text_input("Enter your OpenAI API key:")
+    else:
+        api_key = st.secrets["OpenAI_key"]
+except:
+    if os.getenv("OPENAI_API_KEY") is None:
+        api_key = st.sidebar.text_input("Enter your OpenAI API key:")
+
+
 # File/Cache input
 file_paths = st.sidebar.text_area(
     "Enter file paths (e.g. data/paper.pdf) or URLs (one per line)",
@@ -170,19 +189,21 @@ st.sidebar.info("Hover over points to see chunk text. Click to highlight a chunk
 # Add EmbeddingSearch configuration
 st.sidebar.header("Embedding Search")
 st.sidebar.markdown("*Enter a search query to highlight the chunks that relate to it.*")
-search_prompt = st.sidebar.text_area(
-    "Search Prompt", placeholder="Enter a prompt to show the related chunks.", on_change=update_search
-)
 
-st.session_state.run_search = st.sidebar.button("🔎 Run Search")
+with st.sidebar:
+    with st.form(key="Fuzzy Search"):
+        search_prompt = st.text_area(
+            "Search Prompt", placeholder="Enter a prompt to show the related chunks.", 
+        )
+
+        st.session_state.run_search = st.form_submit_button("🔎 Run Search")
 
 
 with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
     cache_dir = st.text_input("Cache folder", "cache/")
 
-    pipeline_code = st.text_area(
-        "Pipeline Code",
-        """Pipeline([OpenAIEmbeddor(
+
+    pipeline_code = """Pipeline([OpenAIEmbeddor(
             model=embedding_model, 
             batch_size=2000,
             api_key=api_key
@@ -207,7 +228,6 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
             key_name="emoji",
         )
     ], verbose=True)""",
-    )
     if not os.path.exists(cache_dir):
         with open(cache_dir, 'a'):
             os.utime(cache_dir, None)

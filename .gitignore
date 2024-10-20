@@ -3,3 +3,4 @@ data/
 plots/
 saved_collections/
 .streamlit/
+__pycache__

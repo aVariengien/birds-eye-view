@@ -39,6 +39,11 @@ pip install -e .
 streamlit run viz.py
 ```
 
+You can also install the library with
+```
+pip install git+https://github.com/aVariengien/birds-eye-view.git
+```
+
 You need to have `OPENAI_API_KEY` defined in your environment variables. I advise adding `export OPENAI_API_KEY=sk-...` in your `.bashrc`.
 
 The project is in very early stage, and might return errors.
