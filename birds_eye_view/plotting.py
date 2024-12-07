@@ -98,7 +98,8 @@ def make_display_text(chunk: Chunk, fields_to_include: List[str]):
     vis_field = fields_to_include[0]
     vis_field_value = f"""<br><br>{vis_field}: {chunk.attribs[vis_field]}"""
 
-    text = f"{title}{headings}{chunk.display_text.replace("\n", "<br>")}{view_source}{page}"  # {vis_field_value}
+    processed_chunk = chunk.display_text.replace("\n", "<br>")
+    text = f"{title}{headings}{processed_chunk}{view_source}{page}"  # {vis_field_value}
 
     raw_text = wrap_str(
         md(chunk.display_text, convert=[]),
