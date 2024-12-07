@@ -4,3 +4,4 @@ plots/
 saved_collections/
 .streamlit/
 __pycache__
+*.egg-info

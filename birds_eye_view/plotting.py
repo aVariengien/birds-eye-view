@@ -1,3 +1,4 @@
+# %%
 from birds_eye_view.core import (
     ChunkCollection,
     Pipeline,

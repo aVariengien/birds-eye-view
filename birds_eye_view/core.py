@@ -26,6 +26,7 @@ import base64
 
 def wrap_str(s: str, max_line_len=100, skip_line_char="<br>"):
     """Add skip line every max_line_len characters. Ensure that no word is cut in the middle."""
+    s = str(s)
     words = s.split(" ")
     wrapped_str = ""
     line_len = 0
@@ -587,7 +588,7 @@ def default_pipeline_factory() -> Pipeline:
         OpenAIEmbeddor(
             model="text-embedding-3-large", 
             cache_dir=None,
-            batch_size=2000,
+            batch_size=1000,
             ),
         DotProductLabelor(
             nb_labels=3,
@@ -746,3 +747,4 @@ class ChunkCollection:
 
         chunks = [dict_to_chunk(chunk_dict) for chunk_dict in serialized_chunks]
         return cls(chunks=chunks)
+# %%
