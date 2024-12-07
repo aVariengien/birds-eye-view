@@ -5,3 +5,5 @@ saved_collections/
 .streamlit/
 __pycache__
 *.egg-info
+.DS_Store
+scripts/
