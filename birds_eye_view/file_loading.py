@@ -1,15 +1,8 @@
 # %%
-from langchain_community.document_loaders import MathpixPDFLoader  # type: ignore
-from birds_eye_view.core import wrap_str
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from birds_eye_view.core import (
     Chunk,
-    ChunkCollection,
-    OpenAIEmbeddor,
-    OpenAITextProcessor,
-    UMAPReductor,
-    Pipeline,
-    wrap_str,
+    ChunkCollection
 )
 
 import concurrent.futures
@@ -88,15 +81,7 @@ def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
         with open(file_name, "r") as file:
             data = json.load(file)
 
-        chunks = []
-        for i, item in enumerate(data):
-            if max_chunk is not None and i >= max_chunk:
-                break
-
-            chunk = Chunk(og_text=item["text"], attribs=item["attribs"])
-            chunks.append(chunk)
-
-        return chunks
+        return ChunkCollection.load_from_list(data).chunks
 
     except FileNotFoundError:
         print(f"Error: File '{file_name}' not found.")

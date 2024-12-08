@@ -9,8 +9,6 @@ from typing import List, Callable, Dict, Tuple, Set, Optional, Any, Literal, Uni
 import numpy as np
 import random as rd
 import umap  # type: ignore
-import plotly.graph_objects as go  # type: ignore
-import plotly.express as px  # type: ignore
 import concurrent.futures
 from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
 import threading
@@ -691,7 +689,7 @@ class ChunkCollection:
 
     @classmethod
     def load_from_list(cls, l: List[Any], pipeline: Optional[Pipeline] = None) -> 'ChunkCollection':
-        assert len(l) > 0
+        assert len(l) > 0, "The list is empty!"
 
         if type(l[0]) == str:
             dicts = [{"text" : s} for s in l]

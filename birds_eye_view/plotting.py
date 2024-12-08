@@ -8,8 +8,8 @@ from birds_eye_view.core import (
     Chunk,
     DotProductLabelor,
     EmbeddingSearch,
+    wrap_str,
 )
-from birds_eye_view.file_loading import wrap_str
 import colorcet as cc  # type: ignore
 from bokeh.plotting import figure  # type: ignore
 from bokeh.models import ColumnDataSource, HoverTool, Button, TapTool, CustomJS, Div  # type: ignore
@@ -431,7 +431,7 @@ def visualize_chunks(
                     high=max(source.data[field]),
                 )
             else:
-                unique_values = list(set(source.data[field]))
+                unique_values = list(set([str(x) for x in source.data[field]]))
                 color_mapper = CategoricalColorMapper( #type: ignore
                     factors=unique_values, palette=cc.glasbey[: len(unique_values)]
                 )

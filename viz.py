@@ -1,30 +1,13 @@
 import streamlit as st
-import plotly.graph_objects as go  # type: ignore
-import plotly.express as px  # type: ignore
-from birds_eye_view.core import (
-    ChunkCollection,
-    Pipeline,
-    OpenAITextProcessor,
-    OpenAIEmbeddor,
-    UMAPReductor,
-    Chunk,
-    DotProductLabelor,
-    HierachicalLabelMapper,
-    EmbeddingSearch,
-)
+from birds_eye_view.core import *
 from birds_eye_view.plotting import visualize_chunks
-from birds_eye_view.file_loading import load_files, wrap_str
-import numpy as np
+from birds_eye_view.file_loading import load_files
 from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
-from typing import Optional
 
 from streamlit.components.v1 import html # type: ignore
 import os
 
-import pickle
 from bokeh.resources import CDN # type: ignore
-from bokeh.embed import file_html # type: ignore
-import re
 
 import platform
 
@@ -159,14 +142,17 @@ if st.session_state.chunk_collection is None:
 st.sidebar.title("🦉 Bird's eye view")
 st.sidebar.markdown("*Take a look at your documents from above.*")
 
-try:
-    if "OpenAI_key" not in st.secrets:
-        api_key = st.sidebar.text_input("Enter your OpenAI API key:")
-    else:
-        api_key = st.secrets["OpenAI_key"]
-except:
-    if os.getenv("OPENAI_API_KEY") is None:
-        api_key = st.sidebar.text_input("Enter your OpenAI API key:")
+if os.getenv("OPENAI_API_KEY") is not None:
+    api_key = os.getenv("OPENAI_API_KEY")
+else:
+    try:
+        if "OpenAI_key" not in st.secrets:
+            api_key = st.sidebar.text_input("Enter your OpenAI API key:")
+        else:
+            api_key = st.secrets["OpenAI_key"]
+    except:
+        if os.getenv("OPENAI_API_KEY") is None:
+            api_key = st.sidebar.text_input("Enter your OpenAI API key:")
 
 
 # File/Cache input
@@ -278,7 +264,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
         put_field_first(st.session_state.vis_field, st.session_state.viz_options)
         
     n_connections = st.slider(
-        label="Path depth", min_value=1, max_value=20, step=1, value=5
+        label="Path depth", min_value=0, max_value=20, step=1, value=5
     )
     highlight_first_document = st.checkbox("Check to only show the first document, but use the other docs in creating the embeddings.")
     
@@ -366,7 +352,7 @@ if st.sidebar.button("Refresh") or st.session_state.chunk_collection is not None
     html_str = visualize_chunks(
         st.session_state.chunk_collection,
         st.session_state.viz_options, # st.session_state.vis_field viz_options
-        n_connections,
+        n_connections=n_connections,
         document_to_show = file_paths.split("\n")[0] if highlight_first_document else None,
         return_html=True
     )
