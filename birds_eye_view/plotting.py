@@ -111,7 +111,6 @@ def make_display_text(chunk: Chunk, fields_to_include: List[str]):
 def create_callbacks(source, text_div, prev_lines, next_lines, n_connections):
     common_js_code = """
     function updateActiveChunk(source, text_div, prev_lines, next_lines, new_active_index, n_connections) {
-        console.log(new_active_index);
         if (new_active_index !== null && new_active_index >= 0) {
             source.data['active_chunk'][0] = new_active_index;
             source.selected.indices = [new_active_index];
@@ -363,6 +362,7 @@ def visualize_chunks(
         max_width=1200,
         min_width=600,
         sizing_mode="stretch_both",
+        margin=(25,25,25,25)
     )
     # Create glyphs and color bars for each field
     field_glyphs = {}
@@ -481,7 +481,7 @@ def visualize_chunks(
     text_div = Div(
         width=300,
         height=500,
-        text="",
+        text="Click on a point to display its text content here!",
         height_policy="max",
         width_policy="fixed",
         max_height=1000,
@@ -503,7 +503,7 @@ def visualize_chunks(
 
     # Create field selector
     field_selector = Select(
-        title="Show:",
+        title="",
         value=fields_to_include[0],
         options=remove_elements(fields_to_include, ["emoji_list", "keyword_list"]),
         width=300,
@@ -554,7 +554,6 @@ def visualize_chunks(
         var average_zoom = (x_zoom + y_zoom) / 2;  
         var min_level = 0.; // to adjust to change the range
         var max_level = 0.6; // the higher
-        console.log(average_zoom);
 
         for (const field of ['emoji', 'keyword']) {         
             if (field in source.data) {
@@ -565,21 +564,14 @@ def visualize_chunks(
                     (average_zoom - min_level) / (max_level - min_level)
                 );
 
-                console.log(index_to_show);
-                console.log(number_zoom_level);
-
                 // Ensure the index is within the valid range
                 index_to_show = Math.max(0, Math.min(index_to_show, number_zoom_level - 1));
                 
                 if (index_to_show != previous_index['index']) {
-                    console.log(index_to_show);
                     previous_index['index'] = index_to_show;
                     for (let i = 0; i < source.data[field].length; i++) {
                         source.data[field+"_dynamic"][i] = source.data[field+'_list'][i].split(",")[number_zoom_level-1-index_to_show];
                         
-                        //console.log( source.data[field+'_list'][i].split(",")[number_zoom_level-1-index_to_show]);
-                        //console.log( source.data[field+'_list'][i]);
-                        //console.log(number_zoom_level);
                     }
                 }
             }

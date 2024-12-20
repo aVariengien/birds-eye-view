@@ -77,25 +77,9 @@ def import_json(file_name: str, max_chunk: Optional[int] = None) -> List[Chunk]:
     Returns:
     List[Chunk]: A list of Chunk objects.
     """
-    try:
-        with open(file_name, "r") as file:
-            data = json.load(file)
-
-        return ChunkCollection.load_from_list(data).chunks
-
-    except FileNotFoundError:
-        print(f"Error: File '{file_name}' not found.")
-        return []
-    except json.JSONDecodeError:
-        print(f"Error: '{file_name}' is not a valid JSON file.")
-        return []
-    except KeyError as e:
-        print(f"Error: Missing key in JSON structure: {e}")
-        return []
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return []
-
+    with open(file_name, "r") as file:
+        data = json.load(file)
+    return ChunkCollection.load_from_list(data).chunks
 
 ## from pdf
 

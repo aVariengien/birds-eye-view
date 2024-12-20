@@ -498,7 +498,6 @@ class EmbeddingSearch(PipelineStep):
         assert self.embedder is not None
         t1 = time.time()
         if f"RawSearch:{self.prompt}" not in chunks[0].attribs:
-            print(self.embedder.get_embeddings([self.prompt]))
             prompt_embedding = self.embedder.get_embeddings([self.prompt])[0]
             chunk_embeddings = [chunk.embedding for chunk in chunks if chunk.embedding is not None]
             

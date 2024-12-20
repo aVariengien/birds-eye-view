@@ -157,7 +157,7 @@ else:
 
 # File/Cache input
 file_paths = st.sidebar.text_area(
-    "Enter file paths (e.g. data/paper.pdf) or URLs (one per line)",
+    "Enter URLs (one per line)" + is_streamlit_cloud()*" or file paths (if hosted locally)",
     """""",
 )
 
@@ -214,6 +214,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
                 model=embedding_model, 
                 batch_size=2000,
                 api_key=api_key,
+                cache_dir="bev_cache",
                 ),
             DotProductLabelor(
                 possible_labels=ALL_EMOJIS,
@@ -349,9 +350,11 @@ if st.sidebar.button("Refresh") or st.session_state.chunk_collection is not None
         put_field_first(search_field, st.session_state.viz_options)
 
 
+    fields_to_show = st.session_state.viz_options[::]
+    fields_to_show.remove("emoji_label_list")
     html_str = visualize_chunks(
         st.session_state.chunk_collection,
-        st.session_state.viz_options, # st.session_state.vis_field viz_options
+        fields_to_show, # st.session_state.vis_field viz_options
         n_connections=n_connections,
         document_to_show = file_paths.split("\n")[0] if highlight_first_document else None,
         return_html=True
