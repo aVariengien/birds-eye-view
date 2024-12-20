@@ -7,36 +7,15 @@
 
 <img src="img/plan-of-Imola.jpg" alt="drawing" width="500"/>
 
-_A city plan of Imola by Leonardo Da Vinci_.
 
-## Introduction
-
-In August 1502, Leonardo Da Vinci, was appointed by Cesare Borgia to survey the city of Imola to strengthen its fortifications. 
-
-He walked along the streets of the city, took measurements, used some clever geometry, and his drawing genius to produce an accurate view of the city, as seen from above.
-
-This single image compresses countless on-the-ground observations. Once done, the same plan can be used for many activities, from urban planning to simply finding your way in the city. Anyone can use it, even people who have no clue how to produce the plan in the first place.
-
-The field of cartography gives us a collection of representations of the physical world in which we live at different scales, from your neighborhood to the whole planet. With satellite imagery and aerial photography, we can directly _see_ shapes previously constructed from the ground.
-
-**What map do we have of our _information_ world?**
-
-Every day, we are bombarded with mountains of text, images, and videos. Our information world might have taken a larger space in our lives. To digest this flow, we, well, read the text, sometimes partially, look at the images, and watch the videos. We do the equivalent of mindlessly walking in the streets of Imola, looking at every wall, sometimes running to get to a building, hoping that after long enough we'll learn to navigate the city. 
-
-But how can we hope to understand the fast-evolving information neighborhood in which we live? The world?
-
-We have cool statisics like [Google Trends](https://trends.google.com/trends/), or [Google Ngram Viewer](https://books.google.com/ngrams/), hand-made meta-analysis or crappy summaries from ChatGPT.
-
-Fondamentally, we don't have good representations of the information world that would free us from engaging with the content at the smallest scale.
-
-The goal of **🦉 Bird's Eye View** is to create a maps of this space, enabling you to form an understanding of a large corpus of text at a high level.
+Bird’s eye view is an interactive visualization tool that lets you explore large collections of text from above, like looking at a landscape from an airplane. Instead of reading sequentially or filtering content, you get a complete view of the document’s scope while retaining the ability to zoom into specific areas.
 
 ## Setup
 
 To run locally:
 ```
 pip install -e .
-streamlit run viz.py
+streamlit run app.py
 ```
 
 You can also install the library with
