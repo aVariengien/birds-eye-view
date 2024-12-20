@@ -8,3 +8,7 @@ __pycache__
 .DS_Store
 scripts/
 bev_cache/
+.dockerignore
+.github/
+Dockerfile
+fly.toml
