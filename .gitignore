@@ -12,3 +12,4 @@ bev_cache/
 .github/
 Dockerfile
 fly.toml
+.devcontainer
