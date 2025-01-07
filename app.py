@@ -237,8 +237,7 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
             )
         ], verbose=True)""")
     if not os.path.exists(cache_dir):
-        with open(cache_dir, 'a'):
-            os.utime(cache_dir, None)
+        os.mkdir(cache_dir)
 
     # Max chunk slider
     max_chunk = st.slider("Max Chunks", min_value=10, max_value=2000, value=100)
