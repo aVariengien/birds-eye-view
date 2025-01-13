@@ -1,6 +1,6 @@
 # 🦉 Bird's Eye View
 
-⏩️ Online app available [here](https://birds-eye-view.streamlit.app/)
+⏩️ Online app available [here](https://birds-eye-view-app.streamlit.app/)
 
 <br>
 <br>
@@ -31,7 +31,7 @@ The project is in very early stage, and might return errors.
 
 ## Usage and tutorials
 
-The project contains an interactive application (also available online [here](https://birds-eye-view.streamlit.app/)), and a Python library `birds_eye_view`.
+The project contains an interactive application (also available online [here](https://birds-eye-view-app.streamlit.app/)), and a Python library `birds_eye_view`.
 
 You can check the tutorials at `tutorials` to learn to use the python API. The notebook `minimal_example.py` is just you need to know to display a map of a list of strings, while `mmlu.py` presents the whole pipeline.
 
