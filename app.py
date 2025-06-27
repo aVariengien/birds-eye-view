@@ -62,11 +62,15 @@ def load_chunk_collection(filename):
 
 
 def update_search():
+    search_model = local_model if use_local_embeddings else embedding_model
+    search_api_key = local_api_key if use_local_embeddings else api_key
+    search_base_url = local_base_url if use_local_embeddings else None
     embedding_search = EmbeddingSearch(
         prompt=search_prompt,
         threshold=search_threshold,
-        embedding_model=embedding_model,
-        api_key=api_key
+        embedding_model=search_model,
+        api_key=search_api_key,
+        base_url=search_base_url
     )
     st.session_state.chunk_collection.apply_step(embedding_search)
     st.session_state.vis_field = "Search:" + search_prompt
@@ -182,60 +186,127 @@ with st.sidebar:
 
 with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
     cache_dir = st.text_input("Cache folder", "cache/")
-
+    
+    # Local embeddings option
+    use_local_embeddings = st.checkbox("Use Local Embeddings", value=False)
+    
+    if use_local_embeddings:
+        local_base_url = st.text_input("Local Base URL", "http://localhost:1234/v1")
+        local_api_key = st.text_input("Local API Key", "lm-studio", type="password")
+        local_model = st.text_input("Local Model", "nomic-ai/nomic-embed-text-v1.5-GGUF")
+    
     if is_streamlit_cloud():
-        pipeline_code = """Pipeline([OpenAIEmbeddor(
-                model=embedding_model, 
-                batch_size=2000,
-                api_key=api_key
+        if use_local_embeddings:
+            pipeline_code = f"""Pipeline([OpenAIEmbeddor(
+                    model="{local_model}" if use_local_embeddings else embedding_model, 
+                    batch_size=2000,
+                    api_key="{local_api_key}" if use_local_embeddings else api_key,
+                    base_url="{local_base_url}" if use_local_embeddings else None
+                    ),
+                DotProductLabelor(
+                    possible_labels=ALL_EMOJIS,
+                    nb_labels=3,
+                    embedding_model="{local_model}" if use_local_embeddings else embedding_model,
+                    key_name="emoji",
+                    prefix="",
+                    api_key="{local_api_key}" if use_local_embeddings else api_key,
+                    base_url="{local_base_url}" if use_local_embeddings else None
                 ),
-            DotProductLabelor(
-                possible_labels=ALL_EMOJIS,
-                nb_labels=3,
-                embedding_model=embedding_model,
-                key_name="emoji",
-                prefix="",
-                api_key=api_key
-            ),
-            UMAPReductor(
-                verbose=True,
-                n_neighbors=20,
-                min_dist=0.05,
-                random_state=42,
-                n_jobs=1,
-            ),
-            HierachicalLabelMapper(
-                max_number_levels=10,
-                key_name="emoji",
-            )
-        ], verbose=True)"""
+                UMAPReductor(
+                    verbose=True,
+                    n_neighbors=20,
+                    min_dist=0.05,
+                    random_state=42,
+                    n_jobs=1,
+                ),
+                HierachicalLabelMapper(
+                    max_number_levels=10,
+                    key_name="emoji",
+                )
+            ], verbose=True)"""
+        else:
+            pipeline_code = """Pipeline([OpenAIEmbeddor(
+                    model=embedding_model, 
+                    batch_size=2000,
+                    api_key=api_key
+                    ),
+                DotProductLabelor(
+                    possible_labels=ALL_EMOJIS,
+                    nb_labels=3,
+                    embedding_model=embedding_model,
+                    key_name="emoji",
+                    prefix="",
+                    api_key=api_key
+                ),
+                UMAPReductor(
+                    verbose=True,
+                    n_neighbors=20,
+                    min_dist=0.05,
+                    random_state=42,
+                    n_jobs=1,
+                ),
+                HierachicalLabelMapper(
+                    max_number_levels=10,
+                    key_name="emoji",
+                )
+            ], verbose=True)"""
     else:
-        pipeline_code = st.text_area("Pipeline Code", value="""Pipeline([OpenAIEmbeddor(
-                model=embedding_model, 
-                batch_size=2000,
-                api_key=api_key,
-                cache_dir="bev_cache",
+        if use_local_embeddings:
+            pipeline_code = st.text_area("Pipeline Code", value=f"""Pipeline([OpenAIEmbeddor(
+                    model="{local_model}" if use_local_embeddings else embedding_model, 
+                    batch_size=2000,
+                    api_key="{local_api_key}" if use_local_embeddings else api_key,
+                    base_url="{local_base_url}" if use_local_embeddings else None,
+                    cache_dir="bev_cache",
+                    ),
+                DotProductLabelor(
+                    possible_labels=ALL_EMOJIS,
+                    nb_labels=3,
+                    embedding_model="{local_model}" if use_local_embeddings else embedding_model,
+                    key_name="emoji",
+                    prefix="",
+                    api_key="{local_api_key}" if use_local_embeddings else api_key,
+                    base_url="{local_base_url}" if use_local_embeddings else None
                 ),
-            DotProductLabelor(
-                possible_labels=ALL_EMOJIS,
-                nb_labels=3,
-                embedding_model=embedding_model,
-                key_name="emoji",
-                prefix="",
-                api_key=api_key
-            ),
-            UMAPReductor(
-                verbose=True,
-                n_neighbors=20,
-                min_dist=0.05,
-                random_state=42,
-                n_jobs=1,
-            ),
-            HierachicalLabelMapper(
-                max_number_levels=10,
-                key_name="emoji",
-            )
-        ], verbose=True)""")
+                UMAPReductor(
+                    verbose=True,
+                    n_neighbors=20,
+                    min_dist=0.05,
+                    random_state=42,
+                    n_jobs=1,
+                ),
+                HierachicalLabelMapper(
+                    max_number_levels=10,
+                    key_name="emoji",
+                )
+            ], verbose=True)""")
+        else:
+            pipeline_code = st.text_area("Pipeline Code", value="""Pipeline([OpenAIEmbeddor(
+                    model=embedding_model, 
+                    batch_size=2000,
+                    api_key=api_key,
+                    cache_dir="bev_cache",
+                    ),
+                DotProductLabelor(
+                    possible_labels=ALL_EMOJIS,
+                    nb_labels=3,
+                    embedding_model=embedding_model,
+                    key_name="emoji",
+                    prefix="",
+                    api_key=api_key
+                ),
+                UMAPReductor(
+                    verbose=True,
+                    n_neighbors=20,
+                    min_dist=0.05,
+                    random_state=42,
+                    n_jobs=1,
+                ),
+                HierachicalLabelMapper(
+                    max_number_levels=10,
+                    key_name="emoji",
+                )
+            ], verbose=True)""")
     if not os.path.exists(cache_dir):
         os.mkdir(cache_dir)
 

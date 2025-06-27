@@ -199,6 +199,7 @@ class OpenAIEmbeddor(PipelineStep):
     cache_dir: Optional[str] = field(default=None)
     model: str = field(default="text-embedding-3-small")
     api_key: Optional[str] = field(default=None)
+    base_url: Optional[str] = field(default=None)
     client: OpenAI = field(factory=lambda: OpenAI(api_key="dummy"))
     batch_size: int = field(default=4000)
 
@@ -209,15 +210,25 @@ class OpenAIEmbeddor(PipelineStep):
     def __attrs_post_init__(self):
         if self.cache_dir:
             os.makedirs(self.cache_dir, exist_ok=True)
+        
+        # Configure client with base_url and api_key
+        client_kwargs = {}
+        if self.base_url is not None:
+            client_kwargs["base_url"] = self.base_url
+        
         if self.api_key is not None and len(self.api_key) > 0:
-            self.client.api_key = self.api_key
+            client_kwargs["api_key"] = self.api_key
         else:
-            self.client.api_key = getenv("OPENAI_API_KEY")
+            client_kwargs["api_key"] = getenv("OPENAI_API_KEY")
+        
+        self.client = OpenAI(**client_kwargs)
     def load_cache(self):
         t1 = time.time()
         if self.cache_dir:
-            hdf5_path = os.path.join(self.cache_dir, f"{self.model}_embeddings.h5")
-            index_path = os.path.join(self.cache_dir, f"{self.model}_index.json")
+            # Replace forward slashes in model name to avoid directory issues
+            safe_model_name = self.model.replace("/", "_")
+            hdf5_path = os.path.join(self.cache_dir, f"{safe_model_name}_embeddings.h5")
+            index_path = os.path.join(self.cache_dir, f"{safe_model_name}_index.json")
 
             # Load or create HDF5 file
             self.hdf5_file = h5py.File(hdf5_path, 'a')
@@ -233,7 +244,8 @@ class OpenAIEmbeddor(PipelineStep):
 
     def save_index(self):
         if self.cache_dir:
-            index_path = os.path.join(self.cache_dir, f"{self.model}_index.json")
+            safe_model_name = self.model.replace("/", "_")
+            index_path = os.path.join(self.cache_dir, f"{safe_model_name}_index.json")
             with open(index_path, 'w') as f:
                 json.dump(self.index, f)
 
@@ -441,6 +453,7 @@ class DotProductLabelor(PipelineStep):
     embedding_model: str = field()
     key_name: str = field()
     api_key: Optional[str] = field(default=None)
+    base_url: Optional[str] = field(default=None)
     possible_labels: Optional[List[str]] = field(default=None)
     cache_dir: Optional[str] = field(default=None)
     no_cache: bool = field(default=False)
@@ -455,7 +468,7 @@ class DotProductLabelor(PipelineStep):
         if self.possible_labels is None and self.key_name == "emoji":
             self.possible_labels = ALL_EMOJIS
         
-        self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model, api_key=self.api_key)
+        self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model, api_key=self.api_key, base_url=self.base_url)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         assert self.possible_labels is not None, "No possible_labels set."
@@ -489,9 +502,10 @@ class EmbeddingSearch(PipelineStep):
     threshold: Optional[float] = field(default=None)
     embedder: Optional[OpenAIEmbeddor] = field(default=None)
     api_key: Optional[str] = field(default=None)
+    base_url: Optional[str] = field(default=None)
 
     def __attrs_post_init__(self):
-        self.embedder = OpenAIEmbeddor(cache_dir=None, model=self.embedding_model, api_key=self.api_key)
+        self.embedder = OpenAIEmbeddor(cache_dir=None, model=self.embedding_model, api_key=self.api_key, base_url=self.base_url)
 
     def process(self, chunks: List[Chunk]) -> List[Chunk]:
         # Compute prompt embedding
