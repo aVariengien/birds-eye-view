@@ -10,7 +10,7 @@ import numpy as np
 import random as rd
 import umap  # type: ignore
 import concurrent.futures
-from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS
+from birds_eye_view.prompts import DENOISING_PROMPT, MULTIPLE_EMOJI_PROMPT, ALL_EMOJIS, ALL_EMOJI_DESCRIPTIONS
 import threading
 import json
 import markdown # type: ignore
@@ -457,7 +457,7 @@ class DotProductLabelor(PipelineStep):
     possible_labels: Optional[List[str]] = field(default=None)
     cache_dir: Optional[str] = field(default=None)
     no_cache: bool = field(default=False)
-    prefix: str = field(default="")
+    prefixes: Optional[List[str]] = field(default=None)
 
     def __attrs_post_init__(self):
         assert self.key_name in ["emoji", "keyword"]
@@ -467,6 +467,16 @@ class DotProductLabelor(PipelineStep):
         
         if self.possible_labels is None and self.key_name == "emoji":
             self.possible_labels = ALL_EMOJIS
+            self.prefixes = ALL_EMOJI_DESCRIPTIONS
+            print(ALL_EMOJI_DESCRIPTIONS)
+        
+        # Initialize prefixes if not provided
+        if self.prefixes is None and self.possible_labels is not None:
+            self.prefixes = [""] * len(self.possible_labels)
+        
+        # Validate that prefixes length matches possible_labels length
+        if self.prefixes is not None and self.possible_labels is not None:
+            assert len(self.prefixes) == len(self.possible_labels), f"prefixes length ({len(self.prefixes)}) must match possible_labels length ({len(self.possible_labels)})"
         
         self.embedder = OpenAIEmbeddor(cache_dir=self.cache_dir, model=self.embedding_model, api_key=self.api_key, base_url=self.base_url)
 
@@ -474,9 +484,12 @@ class DotProductLabelor(PipelineStep):
         assert self.possible_labels is not None, "No possible_labels set."
         assert len(chunks) > 0
         assert chunks[0].embedding is not None, "Chunk embeddings needs to be computed ahead."
-        # 1. Embed the label strings
-        label_texts = [f"{self.prefix}{label}" for label in self.possible_labels]
+        # 1. Embed the label strings with individual prefixes
+        assert self.prefixes is not None, "prefixes should be initialized in __attrs_post_init__"
+        print(self.prefixes)
+        label_texts = [f"{prefix}{label}" for prefix, label in zip(self.prefixes, self.possible_labels)]
         label_embeddings = self.embedder.get_embeddings(label_texts)
+        print(label_texts)
 
         # 2. Embed all chunk texts
         chunk_embeddings = [chunk.embedding for chunk in chunks]

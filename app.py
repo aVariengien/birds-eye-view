@@ -204,11 +204,9 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
                     base_url="{local_base_url}" if use_local_embeddings else None
                     ),
                 DotProductLabelor(
-                    possible_labels=ALL_EMOJIS,
                     nb_labels=3,
                     embedding_model="{local_model}" if use_local_embeddings else embedding_model,
                     key_name="emoji",
-                    prefix="",
                     api_key="{local_api_key}" if use_local_embeddings else api_key,
                     base_url="{local_base_url}" if use_local_embeddings else None
                 ),
@@ -231,11 +229,9 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
                     api_key=api_key
                     ),
                 DotProductLabelor(
-                    possible_labels=ALL_EMOJIS,
                     nb_labels=3,
                     embedding_model=embedding_model,
                     key_name="emoji",
-                    prefix="",
                     api_key=api_key
                 ),
                 UMAPReductor(
@@ -260,11 +256,9 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
                     cache_dir="bev_cache",
                     ),
                 DotProductLabelor(
-                    possible_labels=ALL_EMOJIS,
                     nb_labels=3,
                     embedding_model="{local_model}" if use_local_embeddings else embedding_model,
                     key_name="emoji",
-                    prefix="",
                     api_key="{local_api_key}" if use_local_embeddings else api_key,
                     base_url="{local_base_url}" if use_local_embeddings else None
                 ),
@@ -292,7 +286,6 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
                     nb_labels=3,
                     embedding_model=embedding_model,
                     key_name="emoji",
-                    prefix="",
                     api_key=api_key
                 ),
                 UMAPReductor(
