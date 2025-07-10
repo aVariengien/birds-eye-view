@@ -12,13 +12,16 @@ Bird’s eye view is an interactive visualization tool that lets you explore lar
 
 ## Setup
 
+
+### Run the app
+
 To run locally:
 ```
 pip install -e .
 streamlit run app.py
 ```
 
-You can also install the library with
+You can also install the python library to create interactive visualisation from you code with
 ```
 pip install git+https://github.com/aVariengien/birds-eye-view.git
 ```
@@ -29,11 +32,20 @@ The project is in very early stage, and might return errors.
 
 **Price:** The large embedding model is at $0.130 / 1M tokens. A 400 character chunks is ~ 80 tokens. So a corpus of 1000 chunks is ~ $0.01. Given how cheap it is, I'd advise using the large embedding model over the small one.
 
+### Local embeddings
+
+By default the app uses OpenAI embedding models. If you'd like to use bird's eye view while keeping the data private, you can use embedding models running locally.
+
+1. Install [LM Studio](https://lmstudio.ai/)
+2. Run a [local server](https://lmstudio.ai/docs/app/api) serving an embedding model such as `nomic embed text v1 5`, the default embedding model suggested in the LM Studio UI. 
+3. Run the streamlit app, and click on the "Use Local Embeddings" in the "Advanced parameters" menu. The default parameters should work.
+4. (Optional) To use the python library with local embeddings, you need to pass the parameters `base_url` (default is `http://localhost:1234/v1`) and `api_key` (default is `lm-studio`) to the `OpenAIEmbeddor` and `DotProductLabelor` objects when creating a `Pipeline`. See the file `tutorial/mmlu.py` for an example of custom pipeline.
+
 ## Usage and tutorials
 
 The project contains an interactive application (also available online [here](https://birds-eye-view-app.streamlit.app/)), and a Python library `birds_eye_view`.
 
-You can check the tutorials at `tutorials` to learn to use the python API. The notebook `minimal_example.py` is just you need to know to display a map of a list of strings, while `mmlu.py` presents the whole pipeline.
+You can check the tutorials at `tutorials` to learn to use the python library. The notebook `minimal_example.py` is just you need to know to display a map of a list of strings, while `mmlu.py` presents the whole pipeline.
 
 ## Walkthrough
 
