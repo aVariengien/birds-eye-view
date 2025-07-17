@@ -57,7 +57,6 @@ def load_chunk_collection(filename):
     if not filename.endswith(".json"):
         filename += ".json"
     full_path = os.path.join("saved_collections", filename)
-
     return ChunkCollection.load_from_file(full_path)
 
 
@@ -79,7 +78,6 @@ def update_search():
 
 # Function to create ChunkCollection
 def create_chunk_collection(document_names, max_chunk, pipeline_code):
-    print(document_names)
     if document_names == st.session_state.doc_names:
         chunks = st.session_state.chunks[:max_chunk]
     else:
@@ -157,7 +155,6 @@ else:
     except:
         if os.getenv("OPENAI_API_KEY") is None:
             api_key = st.sidebar.text_input("Enter your OpenAI API key:")
-
 
 # File/Cache input
 file_paths = st.sidebar.text_area(
@@ -344,7 +341,6 @@ with st.sidebar.expander("Advanced parameters", expanded=False, icon="⚙️"):
 @st.cache_data
 def save(_collection, name):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
-    print("Hello")
     return _collection.save(return_data=True)
 
 with st.sidebar.expander("Save and load", expanded=False, icon="💾"):

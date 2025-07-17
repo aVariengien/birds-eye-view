@@ -139,12 +139,10 @@ class OpenAITextProcessor(PipelineStep):
         cache_key = f"{self.model}-{self.system_prompt}"
         with self.cache_lock:
             if cache_key in self.cache and chunk.text in self.cache[cache_key]:
-                print("Cache hit!")
                 response = self.cache[cache_key][chunk.text]
                 return self.update_chunk(chunk, response)
 
         try:
-            print("Computing cache for text!")
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -239,8 +237,6 @@ class OpenAIEmbeddor(PipelineStep):
                     self.index = json.load(f)
             else:
                 self.index = {}
-
-        print(f"Time to load: {time.time() - t1}")
 
     def save_index(self):
         if self.cache_dir:
@@ -468,7 +464,6 @@ class DotProductLabelor(PipelineStep):
         if self.possible_labels is None and self.key_name == "emoji":
             self.possible_labels = ALL_EMOJIS
             self.prefixes = ALL_EMOJI_DESCRIPTIONS
-            print(ALL_EMOJI_DESCRIPTIONS)
         
         # Initialize prefixes if not provided
         if self.prefixes is None and self.possible_labels is not None:
@@ -486,10 +481,8 @@ class DotProductLabelor(PipelineStep):
         assert chunks[0].embedding is not None, "Chunk embeddings needs to be computed ahead."
         # 1. Embed the label strings with individual prefixes
         assert self.prefixes is not None, "prefixes should be initialized in __attrs_post_init__"
-        print(self.prefixes)
         label_texts = [f"{prefix}{label}" for prefix, label in zip(self.prefixes, self.possible_labels)]
         label_embeddings = self.embedder.get_embeddings(label_texts)
-        print(label_texts)
 
         # 2. Embed all chunk texts
         chunk_embeddings = [chunk.embedding for chunk in chunks]
@@ -739,7 +732,7 @@ class ChunkCollection:
         return cls(chunks=new_chunks, pipeline=pipeline)
 
     @classmethod
-    def load_from_file(cls, source: str | Any) -> 'ChunkCollection':
+    def load_from_file(cls, source: str | Any, pipeline: Optional[Pipeline] = None) -> 'ChunkCollection':
         """
         Load a ChunkCollection from a file.
         """
@@ -770,5 +763,7 @@ class ChunkCollection:
             )
 
         chunks = [dict_to_chunk(chunk_dict) for chunk_dict in serialized_chunks]
-        return cls(chunks=chunks)
+        if pipeline is None:
+            pipeline = default_pipeline_factory()
+        return cls(chunks=new_chunks, pipeline=pipeline)
 # %%
