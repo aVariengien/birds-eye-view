@@ -370,7 +370,6 @@ def visualize_chunks(
     additional_glyph = {}
 
     for field in fields_to_include:
-        print(field, len(source.data[field]))
         if field == "emoji_list" or field == "keyword_list":
             glyph = p.scatter(
                 x="x",

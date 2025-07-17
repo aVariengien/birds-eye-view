@@ -437,8 +437,6 @@ class HierachicalLabelMapper(PipelineStep):
             for label in hierarchical_labels[i][-tail_length-1:]:
                 display_list.append(label)
             chunk.attribs[self.key_name + "_list"] = ",".join(display_list)
-            
-            #print(",".join(hierarchical_labels[i]))
 
         return chunks
 
@@ -765,5 +763,5 @@ class ChunkCollection:
         chunks = [dict_to_chunk(chunk_dict) for chunk_dict in serialized_chunks]
         if pipeline is None:
             pipeline = default_pipeline_factory()
-        return cls(chunks=new_chunks, pipeline=pipeline)
+        return cls(chunks=chunks, pipeline=pipeline)
 # %%
