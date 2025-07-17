@@ -10,7 +10,7 @@ from birds_eye_view.core import (
     EmbeddingSearch,
 )
 from birds_eye_view.plotting import visualize_chunks
-from birds_eye_view.file_loading import load_files, wrap_str
+from birds_eye_view.file_loading import load_files
 import random as rd
 from datasets import load_dataset
 import json
@@ -159,10 +159,11 @@ collection.process_chunks()
 
 # %%[markdown]
 # ## Time to visualize
+# We use the parameter `n_connections=0` to remove the links between points. This is useful when the chunks come from an ordered document, like a book that has been sliced into a list of chunks. But here, there is no meaningful orders among the chunks.
 
 # %%
 
-visualize_chunks(collection)
+visualize_chunks(collection, n_connections=0)
 # %%[markdown]
 # ## Run search
 
@@ -178,17 +179,17 @@ collection.apply_step(search)
 
 # %%
 
-visualize_chunks(collection, fist_field=f"Search:{prompt}")
+visualize_chunks(collection, fist_field=f"Search:{prompt}", n_connections=0)
 # %%[markdown]
 # ## Load and save
 
 # The `save` method will create a json file that can be use to load the chunks later. It doesn't save the pipeline parameters.
 # %%
-collection.save(filename="../saved_collections/mmlu.json")
+collection.save(filename="../saved_collections/mmlu_tutorial.json")
 
 
 # %%
 
-new_collection = ChunkCollection.load_from_file("../saved_collections/mmlu.json")
+new_collection = ChunkCollection.load_from_file("../saved_collections/mmlu_tutorial.json")
 
 # %%
