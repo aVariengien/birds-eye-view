@@ -371,9 +371,12 @@ with st.sidebar.expander("Save and load", expanded=False, icon="💾"):
 # Main logic
 if run_pipeline:
     with st.spinner(f"Processing ..."):
-        st.session_state.chunk_collection = create_chunk_collection(
-            file_paths, max_chunk, pipeline_code, 
-        )
+        try:
+            st.session_state.chunk_collection = create_chunk_collection(
+                file_paths, max_chunk, pipeline_code, 
+            )
+        except AssertionError:
+            st.error("Error while loading the urls/files. Check if the names are correct!")
         st.info(
             f"Succesfully created {len(st.session_state.chunk_collection.chunks)} chunks."
         )
